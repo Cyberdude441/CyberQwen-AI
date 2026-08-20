@@ -1,0 +1,45 @@
+{
+  "timestamp": "difficulty_distribution.json",
+  "total_dataset_size": 236,
+  "difficulty_distribution": {
+    "beginner": {
+      "count": 57,
+      "percentage": 24.2,
+      "categories": {
+        "crypto": 43,
+        "osint": 8,
+        "steganography": 4,
+        "secure_coding": 2
+      }
+    },
+    "intermediate": {
+      "count": 177,
+      "percentage": 75.0,
+      "categories": {
+        "crypto": 141,
+        "forensics": 3,
+        "osint": 6,
+        "steganography": 21,
+        "web_exploitation": 5,
+        "secure_coding": 1
+      }
+    },
+    "advanced": {
+      "count": 2,
+      "percentage": 0.8,
+      "categories": {
+        "crypto": 2
+      }
+    },
+    "expert": {
+      "count": 0,
+      "percentage": 0.0,
+      "categories": {}
+    }
+  },
+  "recommended_training_modes": {
+    "balanced": "20% beginner, 40% intermediate, 30% advanced, 10% expert",
+    "advanced": "10% beginner, 20% intermediate, 50% advanced, 20% expert",
+    "beginner": "70% beginner, 30% intermediate"
+  }
+}

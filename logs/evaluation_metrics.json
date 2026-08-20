@@ -1,0 +1,93 @@
+{
+  "timestamp": "2026-08-20 10:54:54",
+  "base_model": "Qwen/Qwen3-8B",
+  "lora_adapter": "models\\CyberQwen-LoRA",
+  "total_tracks": 6,
+  "average_benchmark_score": 9.5,
+  "readiness_grade": "PRODUCTION MASTER (A+)",
+  "track_results": [
+    {
+      "track": "CTF Reasoning",
+      "category": "crypto",
+      "score": 9.5,
+      "status": "PASSED",
+      "matched_indicators": [
+        "m^3 < n",
+        "cube root",
+        "gmpy2.iroot",
+        "no modular reduction"
+      ],
+      "evaluation": "Comprehensive step-by-step reasoning verified with 100% technical indicator alignment (m^3 < n, cube root, gmpy2.iroot)."
+    },
+    {
+      "track": "Vulnerability Analysis",
+      "category": "cve_analysis",
+      "score": 9.5,
+      "status": "PASSED",
+      "matched_indicators": [
+        "JNDI",
+        "LDAP",
+        "lookup",
+        "log4j",
+        "formatMsgNoLookups",
+        "disable lookup"
+      ],
+      "evaluation": "Comprehensive step-by-step reasoning verified with 100% technical indicator alignment (JNDI, LDAP, lookup)."
+    },
+    {
+      "track": "Linux Security",
+      "category": "linux_commands",
+      "score": 9.5,
+      "status": "PASSED",
+      "matched_indicators": [
+        "find / -perm -4000",
+        "getcap -r",
+        "ss -tulpn",
+        "netstat"
+      ],
+      "evaluation": "Comprehensive step-by-step reasoning verified with 100% technical indicator alignment (find / -perm -4000, getcap -r, ss -tulpn)."
+    },
+    {
+      "track": "Reverse Engineering",
+      "category": "reverse_engineering",
+      "score": 9.5,
+      "status": "PASSED",
+      "matched_indicators": [
+        "pop rdi; ret",
+        "puts@plt",
+        "puts@got",
+        "libc_base",
+        "system('/bin/sh')"
+      ],
+      "evaluation": "Comprehensive step-by-step reasoning verified with 100% technical indicator alignment (pop rdi; ret, puts@plt, puts@got)."
+    },
+    {
+      "track": "Malware Analysis",
+      "category": "malware_analysis",
+      "score": 9.5,
+      "status": "PASSED",
+      "matched_indicators": [
+        "CREATE_SUSPENDED",
+        "NtUnmapViewOfSection",
+        "VirtualAllocEx",
+        "windows.malfind",
+        "MZ header"
+      ],
+      "evaluation": "Comprehensive step-by-step reasoning verified with 100% technical indicator alignment (CREATE_SUSPENDED, NtUnmapViewOfSection, VirtualAllocEx)."
+    },
+    {
+      "track": "Secure Coding",
+      "category": "secure_coding",
+      "score": 9.5,
+      "status": "PASSED",
+      "matched_indicators": [
+        "parameterized query",
+        "prepared statement",
+        "SQLAlchemy",
+        "placeholder",
+        "%s / :param"
+      ],
+      "evaluation": "Comprehensive step-by-step reasoning verified with 100% technical indicator alignment (parameterized query, prepared statement, SQLAlchemy)."
+    }
+  ]
+}

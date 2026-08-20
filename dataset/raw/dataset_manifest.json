@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-08-20T09:42:54Z",
+  "total_sources_configured": 14,
+  "results": {
+    "downloaded": 7,
+    "cached": 2,
+    "failed": 2,
+    "sources": {
+      "mitre_attack": {
+        "status": "success",
+        "path": "dataset\\raw\\threat_intelligence\\mitre_attack\\enterprise-attack.json",
+        "size_bytes": 47953963
+      },
+      "cisa_kev": {
+        "status": "success",
+        "path": "dataset\\raw\\vulnerabilities\\cve\\cisa_known_exploited_vulnerabilities.json",
+        "size_bytes": 1592987
+      },
+      "yara_blackmatter": {
+        "status": "failed"
+      },
+      "yara_emotet": {
+        "status": "success",
+        "path": "dataset\\raw\\malware\\yara\\emotet_trojan.yar",
+        "size_bytes": 521
+      },
+      "yara_wannacry": {
+        "status": "failed"
+      },
+      "owasp_broken_access": {
+        "status": "success",
+        "path": "dataset\\raw\\security_corpus\\secdata_raw\\owasp_a01_broken_access_control.md",
+        "size_bytes": 9306
+      },
+      "owasp_injection": {
+        "status": "success",
+        "path": "dataset\\raw\\security_corpus\\secdata_raw\\owasp_a03_injection.md",
+        "size_bytes": 10112
+      },
+      "owasp_ssrf": {
+        "status": "success",
+        "path": "dataset\\raw\\security_corpus\\secdata_raw\\owasp_a10_ssrf.md",
+        "size_bytes": 5238
+      }
+    }
+  }
+}

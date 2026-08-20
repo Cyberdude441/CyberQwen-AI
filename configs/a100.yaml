@@ -1,0 +1,15 @@
+batch_size: 8
+epochs: 3
+grad_accum: 2
+gradient_checkpointing: true
+lora_alpha: 64
+lora_dropout: 0.05
+lora_rank: 32
+lr: 0.0002
+max_length: 1024
+model_id: Qwen/Qwen3-8B
+optimizer: paged_adamw_32bit
+output_dir: models/CyberQwen-LoRA
+precision: bfloat16
+train_path: dataset/final/train_v2.jsonl
+val_path: dataset/final/validation_v2.jsonl

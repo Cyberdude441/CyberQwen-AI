@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-08-20 09:45:00",
+  "total_real_samples": 2389,
+  "train_samples": 2150,
+  "validation_samples": 239,
+  "total_estimated_tokens": 1230732,
+  "avg_tokens_per_sample": 515.2,
+  "average_quality_score": 9.2,
+  "training_readiness_score": 96.8,
+  "readiness_status": "READY FOR PRODUCTION QLORA TRAINING",
+  "sources": {
+    "mitre_attack": 709,
+    "cisa_kev": 1671,
+    "cisa_threat_advisories": 3,
+    "owasp_guidance": 3,
+    "ctf_challenges": 3
+  },
+  "categories": {
+    "threat_intelligence": 709,
+    "vulnerabilities": 1671,
+    "malware": 3,
+    "security_corpus": 3,
+    "crypto": 1,
+    "pwn": 1,
+    "web": 1
+  },
+  "difficulties": {
+    "advanced": 447,
+    "intermediate": 1939,
+    "expert": 3
+  }
+}

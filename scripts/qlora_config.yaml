@@ -1,0 +1,86 @@
+model:
+  name: "Qwen/Qwen3-8B"
+  revision: "main"
+  trust_remote_code: true
+
+dataset:
+  train_path: "dataset/merged/train.jsonl"
+  val_path: "dataset/merged/val.jsonl"
+  max_seq_length: 4096
+  packing: false
+  text_field: "messages"
+
+training:
+  output_dir: "models/CyberQwen-LoRA"
+  num_train_epochs: 3
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
+  gradient_accumulation_steps: 8
+  learning_rate: 2e-4
+  weight_decay: 0.01
+  warmup_ratio: 0.03
+  lr_scheduler_type: "cosine"
+  logging_steps: 10
+  eval_steps: 100
+  save_steps: 200
+  save_total_limit: 3
+  max_grad_norm: 1.0
+  fp16: false
+  bf16: true
+  gradient_checkpointing: true
+  optim: "paged_adamw_32bit"
+  report_to: "none"
+  seed: 42
+  dataloader_num_workers: 4
+  remove_unused_columns: false
+
+quantization:
+  load_in_4bit: true
+  bnb_4bit_quant_type: "nf4"
+  bnb_4bit_compute_dtype: "bfloat16"
+  bnb_4bit_use_double_quant: true
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  bias: "none"
+  task_type: "CAUSAL_LM"
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+evaluation:
+  test_prompts_path: "scripts/test_prompts.json"
+  max_new_tokens: 2048
+  temperature: 0.7
+  top_p: 0.9
+  do_sample: true
+
+export:
+  merged_model_path: "models/CyberQwen-Merged"
+  save_tokenizer: true
+
+ollama:
+  model_name: "cyberqwen"
+  base_model: "qwen3:8b"
+  modelfile_path: "Modelfile"
+  system_prompt: |
+    You are CyberQwen AI, a specialized cybersecurity assistant.
+    Expertise includes:
+    - CTF solving and challenge analysis
+    - Digital forensics and incident response
+    - OSINT and reconnaissance
+    - Malware analysis and reverse engineering
+    - Vulnerability assessment and exploitation
+    - Secure coding and code review
+    - Linux security and privilege escalation
+    - Binary exploitation (pwn)
+    - Cryptography and steganography
+    - Web application security
+    Always provide accurate, technical, and actionable guidance.

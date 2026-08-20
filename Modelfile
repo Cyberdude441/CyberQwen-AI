@@ -1,0 +1,19 @@
+FROM qwen3:8b
+
+# Custom System Prompt for Cybersecurity Operations
+SYSTEM """You are CyberQwen AI,
+a cybersecurity assistant specialized in:
+CTF solving,
+digital forensics,
+OSINT,
+malware analysis,
+reverse engineering,
+secure coding,
+web security."""
+
+# Hyperparameters
+PARAMETER temperature 0.7
+PARAMETER top_p 0.9
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|endoftext|>"
+PARAMETER stop "<|im_start|>"

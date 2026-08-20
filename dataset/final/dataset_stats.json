@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-08-20 09:47:31",
+  "total_examples": 2500,
+  "train_examples": 2250,
+  "validation_examples": 250,
+  "total_tokens": 1166298,
+  "avg_tokens_per_sample": 466.5,
+  "min_tokens": 15,
+  "max_tokens": 1550,
+  "pool_distribution": {
+    "ctf_solving": 237,
+    "real_cybersecurity": 2199,
+    "synthetic_expert": 64
+  },
+  "category_distribution": {
+    "crypto": 185,
+    "general security": 1145,
+    "cve analysis": 795,
+    "mitre attack": 322,
+    "forensics": 28,
+    "secure coding": 3,
+    "osint": 14,
+    "malware analysis": 2,
+    "web exploitation": 5,
+    "pwn": 1
+  },
+  "difficulty_distribution": {
+    "intermediate": 2240,
+    "advanced": 201,
+    "beginner": 57,
+    "expert": 2
+  },
+  "readiness_score": 98.5,
+  "readiness_status": "READY FOR PRODUCTION QLORA FINE-TUNING"
+}

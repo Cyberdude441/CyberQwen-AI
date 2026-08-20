@@ -1,0 +1,122 @@
+{
+  "timestamp": "2026-08-20 09:31:04",
+  "total_reviewed": 53,
+  "total_accepted": 53,
+  "total_improved": 3,
+  "total_rejected": 0,
+  "total_duplicates": 0,
+  "overall_acceptance_rate_pct": 100.0,
+  "overall_avg_score": 9.4,
+  "readiness_score": 82.9,
+  "readiness_status": "READY FOR PRODUCTION TRAINING",
+  "categories": [
+    {
+      "category": "crypto",
+      "reviewed": 3,
+      "accepted": 3,
+      "improved": 3,
+      "rejected": 0,
+      "duplicates": 0,
+      "acceptance_rate_pct": 100.0,
+      "avg_original_score": 2.83,
+      "avg_final_score": 9.4,
+      "has_report": true
+    },
+    {
+      "category": "forensics",
+      "reviewed": 3,
+      "accepted": 3,
+      "improved": 0,
+      "rejected": 0,
+      "duplicates": 0,
+      "acceptance_rate_pct": 100.0,
+      "avg_original_score": 8.0,
+      "avg_final_score": 8.5,
+      "has_report": false
+    },
+    {
+      "category": "osint",
+      "reviewed": 14,
+      "accepted": 14,
+      "improved": 0,
+      "rejected": 0,
+      "duplicates": 0,
+      "acceptance_rate_pct": 100.0,
+      "avg_original_score": 8.0,
+      "avg_final_score": 8.5,
+      "has_report": false
+    },
+    {
+      "category": "steganography",
+      "reviewed": 25,
+      "accepted": 25,
+      "improved": 0,
+      "rejected": 0,
+      "duplicates": 0,
+      "acceptance_rate_pct": 100.0,
+      "avg_original_score": 8.0,
+      "avg_final_score": 8.5,
+      "has_report": false
+    },
+    {
+      "category": "web_exploitation",
+      "reviewed": 5,
+      "accepted": 5,
+      "improved": 0,
+      "rejected": 0,
+      "duplicates": 0,
+      "acceptance_rate_pct": 100.0,
+      "avg_original_score": 8.0,
+      "avg_final_score": 8.5,
+      "has_report": false
+    },
+    {
+      "category": "secure_coding",
+      "reviewed": 3,
+      "accepted": 3,
+      "improved": 0,
+      "rejected": 0,
+      "duplicates": 0,
+      "acceptance_rate_pct": 100.0,
+      "avg_original_score": 8.0,
+      "avg_final_score": 8.5,
+      "has_report": false
+    }
+  ],
+  "difficulty_distribution": {
+    "beginner": {
+      "count": 57,
+      "percentage": 24.2,
+      "categories": {
+        "crypto": 43,
+        "osint": 8,
+        "steganography": 4,
+        "secure_coding": 2
+      }
+    },
+    "intermediate": {
+      "count": 177,
+      "percentage": 75.0,
+      "categories": {
+        "crypto": 141,
+        "forensics": 3,
+        "osint": 6,
+        "steganography": 21,
+        "web_exploitation": 5,
+        "secure_coding": 1
+      }
+    },
+    "advanced": {
+      "count": 2,
+      "percentage": 0.8,
+      "categories": {
+        "crypto": 2
+      }
+    },
+    "expert": {
+      "count": 0,
+      "percentage": 0.0,
+      "categories": {}
+    }
+  }
+}

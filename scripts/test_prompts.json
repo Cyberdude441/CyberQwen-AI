@@ -1,0 +1,79 @@
+﻿[
+  {
+    "track": "CTF",
+    "category": "cryptography",
+    "domain": "Cryptography",
+    "prompt": "We have an RSA encryption implementation with public key (e=3, n). Three different targets receive the same message m encrypted under three different moduli n1, n2, n3. Explain how to perform Håstad\'s Broadcast Attack using the Chinese Remainder Theorem to recover the plaintext m without factoring any modulus.",
+    "expected_keywords": ["håstad", "chinese remainder theorem", "crt", "cube root", "e=3", "moduli", "plaintext"]
+  },
+  {
+    "track": "CTF",
+    "category": "forensics",
+    "domain": "Digital Forensics",
+    "prompt": "Analyze a memory capture (mem.dmp) using Volatility 3 to detect reflective DLL injection. Specify the commands and indicators of compromise (VAD protections, PAGE_EXECUTE_READWRITE, unmapped memory).",
+    "expected_keywords": ["volatility", "windows.malfind", "vad", "page_execute_readwrite", "injection", "dll", "mem.dmp"]
+  },
+  {
+    "track": "CTF",
+    "category": "steganography",
+    "domain": "Steganography",
+    "prompt": "An image file (challenge.png) contains hidden data. Explain the analysis workflow using zsteg, binwalk, pngcheck, and LSB (Least Significant Bit) extraction to identify and recover concealed payloads or embedded archives.",
+    "expected_keywords": ["zsteg", "lsb", "binwalk", "pngcheck", "payload", "steganography", "hidden"]
+  },
+  {
+    "track": "CTF",
+    "category": "osint",
+    "domain": "OSINT",
+    "prompt": "Provide a structured OSINT methodology to map the external attack surface of a target domain, including subdomain enumeration (crt.sh, Amass), WHOIS/DNS historical lookups, and cloud bucket discovery.",
+    "expected_keywords": ["subdomain", "amass", "crt.sh", "whois", "dns", "reconnaissance", "s3"]
+  },
+  {
+    "track": "CTF",
+    "category": "web_exploitation",
+    "domain": "Web Exploitation",
+    "prompt": "Explain the mechanics of a Second-Order SQL Injection vulnerability. Describe how malicious payload is stored in the database during registration and subsequently triggered in an administrative profile viewer, with exploitation steps.",
+    "expected_keywords": ["second-order", "sql injection", "database", "payload", "stored", "sanitization", "parameterized"]
+  },
+  {
+    "track": "CTF",
+    "category": "reverse_engineering",
+    "domain": "Reverse Engineering",
+    "prompt": "A binary employs anti-debugging techniques using ptrace(PTRACE_TRACEME, ...) on Linux and IsDebuggerPresent / PEB BeingDebugged flag on Windows. Explain how to identify and patch these checks in Ghidra or GDB.",
+    "expected_keywords": ["ptrace", "ptrace_traceme", "peb", "beingdebugged", "ghidra", "gdb", "patch", "anti-debugging"]
+  },
+  {
+    "track": "CTF",
+    "category": "pwn",
+    "domain": "Binary Exploitation (Pwn)",
+    "prompt": "Explain how to construct a Return-Oriented Programming (ROP) chain to bypass Non-Executable (NX/DEP) memory in a 64-bit Linux ELF binary to spawn /bin/sh via execve syscall.",
+    "expected_keywords": ["rop", "gadget", "pop rdi", "execve", "nx", "dep", "/bin/sh", "syscall", "ret"]
+  },
+  {
+    "track": "Security",
+    "category": "malware_analysis",
+    "domain": "Malware Analysis",
+    "prompt": "Describe the dynamic analysis indicators of a Cobalt Strike Beacon payload, including named pipe communication, sleep obfuscation techniques (Ekko / Foliage), and memory detection evasion.",
+    "expected_keywords": ["cobalt strike", "beacon", "named pipe", "sleep obfuscation", "ekko", "evasion", "c2"]
+  },
+  {
+    "track": "Security",
+    "category": "linux_privesc",
+    "domain": "Linux Privilege Escalation",
+    "prompt": "Explain how an unprivileged local user can exploit a misconfigured cron job executing a writable script or wildcard expansion (tar * checkpoint) to achieve root privilege escalation on Linux.",
+    "expected_keywords": ["cron", "wildcard", "tar", "checkpoint-action", "root", "privilege escalation", "gtfobins"]
+  },
+  {
+    "track": "Security",
+    "category": "secure_coding",
+    "domain": "Secure Coding",
+    "prompt": "Review a Python FastAPI application vulnerable to Insecure Deserialization (pickle.loads) and demonstrate how to refactor the endpoint using secure JSON schemas and Pydantic validation models.",
+    "expected_keywords": ["pickle", "deserialization", "pydantic", "json", "fastapi", "validation", "secure coding"]
+  },
+  {
+    "track": "Security",
+    "category": "vulnerability_analysis",
+    "domain": "Vulnerability Analysis",
+    "prompt": "Analyze the root cause and exploitation mechanism of Log4Shell (CVE-2021-44228) via JNDI/LDAP lookup injection, and outline network and code-level remediation strategies.",
+    "expected_keywords": ["log4shell", "cve-2021-44228", "jndi", "ldap", "lookup", "log4j", "remediation", "patch"]
+  }
+]

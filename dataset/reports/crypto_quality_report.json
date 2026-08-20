@@ -1,0 +1,61 @@
+{
+  "category": "crypto",
+  "timestamp": "2026-08-20T09:25:58Z",
+  "total_samples_reviewed": 3,
+  "accepted_samples": 3,
+  "improved_samples": 3,
+  "rejected_samples": 0,
+  "duplicate_samples": 0,
+  "average_original_score": 2.83,
+  "average_final_score": 9.4,
+  "samples": [
+    {
+      "id": "crypto_0001",
+      "category": "crypto",
+      "original_score": 4.0,
+      "final_score": 9.5,
+      "issues": [
+        "Extremely basic task that requires zero complex cybersecurity reasoning, making it low-signal for fine-tuning a specialized cybersecurity model like CyberQwen-AI.",
+        "Lacks step-by-step technical problem solving or explanation of the algorithm being used.",
+        "Does not test any advanced domains such as CTF exploitation, malware analysis, reverse engineering, forensics, secure coding, or vulnerability analysis."
+      ],
+      "improvements": [
+        "Rewritten with step-by-step reasoning and technical tooling. (Score 4.0 -> 9.5)",
+        "Applied suggestion: Replace this example with a more advanced cryptography challenge relevant to CTFs, such as analyzing a weak custom XOR implementation, identifying padding oracle vulnerabilities, or explaining how to break an RSA implementation with a small public exponent or common modulus."
+      ],
+      "accepted": true
+    },
+    {
+      "id": "crypto_0002",
+      "category": "crypto",
+      "original_score": 4.5,
+      "final_score": 9.2,
+      "issues": [
+        "Mathematical/Cryptographic inaccuracy: The provided ciphertext 'Wkh txlfn eurzq ira mxpsv ryhu wkh odcb grj' shifted backward by 5 actually decrypts to 'Rfc npgas zmjui dnv epkqa jtcq rfc gvYw yjb' (or similar gibberish depending on direction), because the classic 'The quick brown fox...' sentence shifted by +3 ('Wkh txlfn...') requires a shift of 3, not 5.",
+        "Lack of reasoning and completeness: The assistant fails to show the decryption math, alphabet mapping, or step-by-step breakdown required for a high-signal security/CTF fine-tuning dataset.",
+        "Low technical complexity: A simple Caesar cipher shift is trivial and barely qualifies as advanced or high-value training data for an elite cybersecurity model like CyberQwen-AI without detailed programmatic solving (e.g., frequency analysis or automated script output)."
+      ],
+      "improvements": [
+        "Rewritten with step-by-step reasoning and technical tooling. (Score 4.5 -> 9.2)",
+        "Applied suggestion: Replace the example with a more complex cryptography CTF challenge involving multi-layered encoding, custom XOR keys, or a Python script using pwntools/base64/cryptography libraries to solve a realistic cipher, ensuring all math and shifts are rigorously verified."
+      ],
+      "accepted": true
+    },
+    {
+      "id": "crypto_0003",
+      "category": "crypto",
+      "original_score": 0.0,
+      "final_score": 9.5,
+      "issues": [
+        "The output ciphertext does not match the decrypted plaintext using the Vigen\u00e8re cipher and keyword 'CRYPTO'. Let's verify: 'L' (11) shifted backwards by 'C' (2) is 'J', not 'I'. The cipher provided is mathematically incorrect for the stated plaintext and key.",
+        "The assistant fails to show the step-by-step mathematical reasoning or tabular breakdown required for a proper cryptographic analysis response.",
+        "Lacks completeness and specificity regarding the Vigen\u00e8re decryption process."
+      ],
+      "improvements": [
+        "Rewritten with step-by-step reasoning and technical tooling. (Score 0.0 -> 9.5)",
+        "Applied suggestion: Recalculate the Vigen\u00e8re cipher correctly or provide the exact algorithmic steps/Python snippet required to perform the decryption, ensuring the input ciphertext properly maps to the claimed plaintext output."
+      ],
+      "accepted": true
+    }
+  ]
+}
