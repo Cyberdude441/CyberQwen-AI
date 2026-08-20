@@ -1,4 +1,4 @@
-﻿# CyberQwen-AI: Cybersecurity LLM & QLoRA Fine-Tuning Pipeline
+# CyberQwen-AI: Cybersecurity LLM & QLoRA Fine-Tuning Pipeline
 
 CyberQwen-AI is an end-to-end specialized artificial intelligence platform for offensive and defensive cybersecurity operations, CTF challenges, binary reverse engineering, malware analysis, digital forensics, secure coding, and automated AI pair-programming with Aider.
 
@@ -99,15 +99,15 @@ The training script `scripts/train_qlora.py` uses `transformers`, `peft`, `bitsa
 - **Checkpoint Resumption**: Supports resuming training seamlessly via `--resume_from_checkpoint`.
 
 ```powershell
-# Launch QLoRA Fine-Tuning
+# Launch Production QLoRA Fine-Tuning
 python scripts/train_qlora.py `
   --model_id "Qwen/Qwen3-8B" `
-  --train_path "dataset/merged/train.jsonl" `
-  --val_path "dataset/merged/val.jsonl" `
+  --train_path "dataset/final/train_v2.jsonl" `
+  --val_path "dataset/final/validation_v2.jsonl" `
   --output_dir "models/CyberQwen-LoRA" `
   --epochs 3 `
-  --batch_size 2 `
-  --grad_accum 8 `
+  --batch_size 1 `
+  --grad_accum 16 `
   --lr 2e-4
 ```
 
