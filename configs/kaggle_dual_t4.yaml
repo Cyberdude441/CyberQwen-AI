@@ -14,5 +14,5 @@ model_id: Qwen/Qwen3-8B
 optimizer: paged_adamw_8bit
 output_dir: models/CyberQwen-LoRA
 precision: fp16
-train_path: dataset/final/train_v2.jsonl
-val_path: dataset/final/validation_v2.jsonl
+train_path: dataset/final/train_v3.jsonl
+val_path: dataset/final/validation_v3.jsonl

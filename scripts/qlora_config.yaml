@@ -2,8 +2,8 @@ dataset:
   max_seq_length: 4096
   packing: false
   text_field: messages
-  train_path: dataset/final/train_v2.jsonl
-  val_path: dataset/final/validation_v2.jsonl
+  train_path: dataset/final/train_v3.jsonl
+  val_path: dataset/final/validation_v3.jsonl
 evaluation:
   do_sample: true
   max_new_tokens: 2048

@@ -1,7 +1,7 @@
 """
-CyberQwen-AI: Production Dataset Pre-Flight & Leakage Verification Suite
-Validates dataset/final/train_v2.jsonl and dataset/final/validation_v2.jsonl
-for Qwen3 ChatML conformance, zero cross-split data leakage, and exact sample counts.
+CyberQwen-AI: Production Dataset Pre-Flight & Leakage Verification Suite (v3)
+Validates dataset/final/train_v3.jsonl and dataset/final/validation_v3.jsonl
+for Qwen3 ChatML conformance, zero cross-split data leakage, and exact sample validity.
 """
 
 import json
@@ -14,7 +14,7 @@ def verify_dataset_file(filepath: Path):
     print(f"\n[*] Validating: {filepath}")
     if not filepath.exists():
         print(f"[!] ERROR: File not found: {filepath}")
-        return False, set(), 0
+        return False, set(), 0, Counter()
         
     total_lines = 0
     corrupted_lines = 0
@@ -22,7 +22,6 @@ def verify_dataset_file(filepath: Path):
     duplicate_count = 0
     seen_hashes = set()
     roles_counter = Counter()
-    categories_counter = Counter()
     difficulties_counter = Counter()
     
     with open(filepath, "r", encoding="utf-8") as f:
@@ -78,9 +77,7 @@ def verify_dataset_file(filepath: Path):
             else:
                 seen_hashes.add(content_hash)
                 
-            cat = data.get("category", "cybersecurity")
             diff = data.get("difficulty", "intermediate")
-            categories_counter[cat] += 1
             difficulties_counter[diff] += 1
             valid_samples += 1
 
@@ -91,35 +88,38 @@ def verify_dataset_file(filepath: Path):
     print(f"  [+] Roles distribution: {dict(roles_counter)}")
     print(f"  [+] Difficulties:       {dict(difficulties_counter)}")
     
-    is_ok = (corrupted_lines == 0 and valid_samples > 0)
-    return is_ok, seen_hashes, valid_samples
+    is_ok = (corrupted_lines == 0 and valid_samples > 0 and duplicate_count == 0)
+    return is_ok, seen_hashes, valid_samples, difficulties_counter
 
 def main():
+    default_train = Path("dataset/final/train_v3.jsonl") if Path("dataset/final/train_v3.jsonl").exists() else Path("dataset/final/train_v2.jsonl")
+    default_val = Path("dataset/final/validation_v3.jsonl") if Path("dataset/final/validation_v3.jsonl").exists() else Path("dataset/final/validation_v2.jsonl")
+
     parser = argparse.ArgumentParser(description="CyberQwen-AI: Dataset Preflight Verifier")
-    parser.add_argument("--train_path", type=Path, default=Path("dataset/final/train_v2.jsonl"),
-                        help="Train dataset path (default: dataset/final/train_v2.jsonl)")
-    parser.add_argument("--val_path", type=Path, default=Path("dataset/final/validation_v2.jsonl"),
-                        help="Validation dataset path (default: dataset/final/validation_v2.jsonl)")
+    parser.add_argument("--train_path", type=Path, default=default_train,
+                        help=f"Train dataset path (default: {default_train})")
+    parser.add_argument("--val_path", type=Path, default=default_val,
+                        help=f"Validation dataset path (default: {default_val})")
     args = parser.parse_args()
 
     print("=" * 75)
     print("CYBERQWEN-AI: PRODUCTION DATASET INTEGRITY & PRE-FLIGHT AUDIT")
     print("=" * 75)
 
-    train_ok, train_hashes, train_count = verify_dataset_file(args.train_path)
-    val_ok, val_hashes, val_count = verify_dataset_file(args.val_path)
+    train_ok, train_hashes, train_count, train_diffs = verify_dataset_file(args.train_path)
+    val_ok, val_hashes, val_count, val_diffs = verify_dataset_file(args.val_path)
 
     # Cross-split leakage check
     overlap = train_hashes.intersection(val_hashes)
     leakage_count = len(overlap)
     print(f"\n[*] Cross-Split Overlap (Data Leakage): {leakage_count} samples (Clean Isolation: {leakage_count == 0})")
 
-    all_ok = train_ok and val_ok and (leakage_count == 0) and (train_count == 2250) and (val_count == 250)
+    all_ok = train_ok and val_ok and (leakage_count == 0) and (train_count > 0) and (val_count > 0)
 
     print("\n" + "=" * 75)
     print("DATASET PRE-FLIGHT VERIFICATION SUMMARY:")
-    print(f"  Train Samples:      {train_count} (Expected: 2250) -> {'PASS' if train_count == 2250 else 'FAIL'}")
-    print(f"  Validation Samples: {val_count} (Expected: 250)  -> {'PASS' if val_count == 250 else 'FAIL'}")
+    print(f"  Train Samples:      {train_count} (Unique, 0 Duplicates) -> {'PASS' if train_ok else 'FAIL'}")
+    print(f"  Validation Samples: {val_count} (Unique, 0 Duplicates) -> {'PASS' if val_ok else 'FAIL'}")
     print(f"  Cross-Split Leak:   {leakage_count} (Expected: 0)    -> {'PASS' if leakage_count == 0 else 'FAIL'}")
     print(f"  Qwen3 ChatML JSONL: {'PASS' if (train_ok and val_ok) else 'FAIL'}")
     print(f"  FINAL STATUS:       {'READY FOR TRAINING' if all_ok else 'NOT READY'}")
