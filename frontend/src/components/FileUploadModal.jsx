@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { X, UploadCloud, FileCode, CheckCircle2, Loader2 } from 'lucide-react';
+import { X, UploadCloud, FolderArchive, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 
 export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading }) {
   const [selectedFile, setSelectedFile] = useState(null);
-  const [action, setAction] = useState('vulnerability_analysis');
+  const [action, setAction] = useState('ctf_assistant');
   const [customPrompt, setCustomPrompt] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
@@ -30,13 +30,15 @@ export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading }
     onUpload(selectedFile, action, customPrompt);
   };
 
+  const isZip = selectedFile?.name?.toLowerCase().endsWith('.zip');
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
       <div className="w-full max-w-lg rounded-2xl glass-panel border border-cyber-border shadow-cyber-card overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-cyber-border bg-cyber-dark/40">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-cyber-border bg-cyber-dark/60">
           <div className="flex items-center gap-2">
-            <FileCode className="w-5 h-5 text-cyber-cyan" />
-            <h2 className="text-base font-bold font-mono text-white">Upload Security Target</h2>
+            <FolderArchive className="w-5 h-5 text-cyber-neon" />
+            <h2 className="text-base font-bold font-mono text-white">Upload Target Evidence / Archive</h2>
           </div>
           <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors">
             <X className="w-5 h-5" />
@@ -59,19 +61,21 @@ export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading }
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
-              accept=".txt,.pdf,.json,.csv,.py,.c,.cpp,.h,.js,.ts,.html,.css,.log,.md,.yaml,.yml,.sh,.ps1,.yar"
+              accept=".zip,.txt,.pdf,.json,.csv,.py,.c,.cpp,.h,.java,.js,.ts,.html,.css,.log,.md,.yaml,.yml,.sh,.ps1,.yar"
             />
             {selectedFile ? (
               <div className="flex flex-col items-center gap-2 text-cyber-cyan">
                 <CheckCircle2 className="w-8 h-8 text-cyber-neon" />
                 <span className="font-mono text-sm font-semibold text-white">{selectedFile.name}</span>
-                <span className="text-xs text-slate-400 font-mono">{(selectedFile.size / 1024).toFixed(1)} KB</span>
+                <span className="text-xs text-slate-400 font-mono">
+                  {(selectedFile.size / 1024).toFixed(1)} KB {isZip ? '• ZIP Archive (Auto-Extraction Enabled)' : '• Target File'}
+                </span>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2 text-slate-400">
                 <UploadCloud className="w-8 h-8 text-slate-500" />
-                <span className="text-sm font-medium text-slate-300">Click to browse or drag & drop target file</span>
-                <span className="text-xs text-slate-500 font-mono">Supports .py, .c, .js, .json, .log, .pdf, .txt, .yar, etc.</span>
+                <span className="text-sm font-medium text-slate-300">Drop CTF Challenge (.zip) or Source File</span>
+                <span className="text-xs text-slate-500 font-mono">Supports .zip, .py, .c, .js, .json, .log, .pdf, etc.</span>
               </div>
             )}
           </div>
@@ -79,29 +83,29 @@ export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading }
           {/* Analysis Goal */}
           <div>
             <label className="block text-xs font-mono font-semibold text-slate-300 mb-1.5 uppercase">
-              Operational Objective
+              Security Operational Objective
             </label>
             <select
               value={action}
               onChange={(e) => setAction(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-cyber-dark/80 border border-slate-700 text-sm text-slate-200 font-mono focus:outline-none focus:border-cyber-cyan"
             >
+              <option value="ctf_assistant">🏆 CTF Challenge Solver (Extract & Analyze Evidence)</option>
               <option value="vulnerability_analysis">🛡️ Comprehensive Vulnerability Assessment</option>
               <option value="code_review">🔍 Secure Code Review (OWASP Top 10 / CWE)</option>
               <option value="log_analysis">📊 Security Log & IoC Incident Analysis</option>
               <option value="cve_explainer">🐛 CVE & Exploit Root Cause Breakdown</option>
-              <option value="ctf_assistant">🏆 CTF Challenge & Exploit Script Solver</option>
             </select>
           </div>
 
           {/* Optional Prompt */}
           <div>
             <label className="block text-xs font-mono font-semibold text-slate-300 mb-1.5 uppercase">
-              Custom Directives (Optional)
+              Target Directives (Optional)
             </label>
             <input
               type="text"
-              placeholder="e.g. Focus on memory corruption and write a pwntools solver"
+              placeholder="e.g. Find flag in encrypted pyc or write pwntools solver script"
               value={customPrompt}
               onChange={(e) => setCustomPrompt(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-cyber-dark/80 border border-slate-700 text-sm text-slate-200 font-mono focus:outline-none focus:border-cyber-cyan"
@@ -122,7 +126,7 @@ export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading }
               disabled={!selectedFile || isLoading}
               className="flex items-center gap-2 px-5 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-cyber-neon text-cyber-dark font-bold font-mono text-sm hover:opacity-90 transition-all disabled:opacity-50 shadow-neon"
             >
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Execute Analysis'}
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Inspect & Analyze Evidence'}
             </button>
           </div>
         </form>

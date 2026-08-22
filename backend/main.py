@@ -1,6 +1,6 @@
 """
 CyberQwen-AI: FastAPI Live REST API Server
-Provides endpoints for conversational chat, multi-format file analysis, and health telemetry.
+Provides endpoints for conversational chat, multi-format file/archive analysis, and health telemetry.
 """
 
 import os
@@ -12,14 +12,14 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from backend.model_service import CyberQwenService
+from backend.archive_processor import process_file_or_zip
 
 app = FastAPI(
     title="CyberQwen-AI Backend API",
-    description="Live inference and cybersecurity file analysis API for CyberQwen-8B",
+    description="Live inference and cybersecurity file/archive analysis API for CyberQwen-8B",
     version="1.0.0"
 )
 
-# Enable CORS for Vite frontend (http://localhost:5173) and any local client
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,7 +28,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize single in-memory model service instance
 cyber_service = CyberQwenService()
 
 class ChatMessage(BaseModel):
@@ -86,58 +85,92 @@ def chat(payload: ChatRequest):
 @app.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    action: Optional[str] = Form(default="vulnerability_analysis"),
+    action: Optional[str] = Form(default="ctf_assistant"),
     custom_prompt: Optional[str] = Form(default=None)
 ):
     try:
         content_bytes = await file.read()
-        filename = file.filename or "uploaded_file.txt"
-        extracted_text = cyber_service.extract_text_from_file(filename, content_bytes)
+        filename = file.filename or "uploaded_file.bin"
         
-        # Build task-specific cybersecurity prompt
-        action_map = {
-            "vulnerability_analysis": (
-                f"Perform a comprehensive Vulnerability and Security Assessment of the file `{filename}` below.\n"
-                f"Structure your response with:\n"
+        extracted = process_file_or_zip(filename, content_bytes)
+        file_list_str = "\n".join([f"- {name}" for name in extracted["file_names"]])
+        
+        print("\n" + "=" * 60)
+        print(f"UPLOAD:\n{filename}")
+        print("EXTRACTED:")
+        for fn in extracted["file_names"]:
+            print(f"- {fn}")
+        print(f"CONTEXT SIZE:\n{extracted['estimated_tokens']} tokens")
+        print("MODEL INPUT:\nverified")
+        print("=" * 60 + "\n")
+
+        if action == "ctf_assistant":
+            prompt = (
+                f"You are analyzing an uploaded CTF challenge.\n\n"
+                f"Files found:\n{file_list_str}\n\n"
+                f"Relevant extracted content:\n{extracted['context']}\n\n"
+                f"Perform:\n\n"
+                f"1. Challenge identification\n"
+                f"2. File type analysis\n"
+                f"3. Vulnerability/weakness discovery\n"
+                f"4. Relevant cryptographic or forensic observations\n"
+                f"5. Possible solution approach\n"
+                f"6. Required tools\n"
+                f"7. Flag extraction strategy\n\n"
+                f"Only provide findings based on the uploaded files.\n"
+                f"If no evidence exists, say so."
+            )
+        elif action == "vulnerability_analysis":
+            prompt = (
+                f"You are conducting a Vulnerability Assessment on uploaded files.\n\n"
+                f"Files analyzed:\n{file_list_str}\n\n"
+                f"Extracted content:\n{extracted['context']}\n\n"
+                f"Provide:\n"
                 f"1. **Vulnerability Summary**\n"
                 f"2. **Risk Level** (Critical / High / Medium / Low / Safe)\n"
-                f"3. **Technical Explanation & Exploitation Vectors**\n"
-                f"4. **Actionable Remediation & Secure Code Fix**\n\n"
-                f"File Content:\n```\n{extracted_text[:4000]}\n```"
-            ),
-            "code_review": (
-                f"Conduct an in-depth Secure Code Review of `{filename}` against OWASP Top 10 and CWE standards.\n"
-                f"Highlight dangerous functions, memory leaks, injection points, and provide refactored secure code.\n\n"
-                f"Code Content:\n```\n{extracted_text[:4000]}\n```"
-            ),
-            "log_analysis": (
-                f"Analyze the following security/system log file `{filename}` for indicators of compromise (IoCs), "
-                f"brute force attempts, abnormal traffic spikes, or lateral movement patterns.\n\n"
-                f"Log Content:\n```\n{extracted_text[:4000]}\n```"
-            ),
-            "cve_explainer": (
-                f"Explain the vulnerabilities, affected components, root cause, and vendor patch advisories for `{filename}`:\n\n"
-                f"Content:\n```\n{extracted_text[:4000]}\n```"
-            ),
-            "ctf_assistant": (
-                f"Act as a competitive CTF solving assistant for the challenge/source code file `{filename}`.\n"
-                f"Identify weaknesses, cryptographic flaws, or binary/web exploitation paths and write a solver script.\n\n"
-                f"Content:\n```\n{extracted_text[:4000]}\n```"
+                f"3. **Technical Explanation & Root Cause**\n"
+                f"4. **Actionable Remediation & Patched Code**"
             )
-        }
+        elif action == "code_review":
+            prompt = (
+                f"You are conducting a Secure Code Review against OWASP Top 10 and CWE standards.\n\n"
+                f"Target files:\n{file_list_str}\n\n"
+                f"Code context:\n{extracted['context']}\n\n"
+                f"Highlight insecure patterns, memory flaws, injection risks, and provide secure refactored code."
+            )
+        elif action == "log_analysis":
+            prompt = (
+                f"Analyze the following security/system logs for Indicators of Compromise (IoCs), abnormal traffic, or intrusion signals.\n\n"
+                f"Log files:\n{file_list_str}\n\n"
+                f"Log stream context:\n{extracted['context']}\n\n"
+                f"Summarize threat timeline, suspicious IP/user entities, and defense response."
+            )
+        else:
+            prompt = (
+                f"Analyze the following cybersecurity artifact:\n\n"
+                f"Files:\n{file_list_str}\n\n"
+                f"Content:\n{extracted['context']}"
+            )
 
-        prompt = custom_prompt if custom_prompt else action_map.get(action, action_map["vulnerability_analysis"])
+        if custom_prompt:
+            prompt += f"\n\nUser Custom Directive: {custom_prompt}"
 
-        result = cyber_service.generate_response(message=prompt, max_new_tokens=1500, temperature=0.5)
+        result = cyber_service.generate_response(message=prompt, max_new_tokens=1500, temperature=0.3)
+        
         return {
             "filename": filename,
             "action": action,
-            "extracted_length": len(extracted_text),
+            "is_archive": extracted["is_archive"],
+            "file_names": extracted["file_names"],
+            "file_count": extracted["file_count"],
+            "files_metadata": extracted["files_metadata"],
+            "estimated_tokens": extracted["estimated_tokens"],
             "response": result["response"],
             "tokens": result["tokens"],
             "latency_ms": result["latency_ms"]
         }
     except Exception as e:
+        print(f"[!] Upload processing error: {e}")
         raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}")
 
 @app.post("/analyze")

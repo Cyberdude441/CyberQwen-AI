@@ -3,7 +3,7 @@ import Header from './components/Header';
 import ChatMessage from './components/ChatMessage';
 import QuickActions from './components/QuickActions';
 import FileUploadModal from './components/FileUploadModal';
-import { Send, Upload, ShieldAlert, Sparkles, Terminal, Loader2 } from 'lucide-react';
+import { Send, Upload, FolderArchive, Loader2, Check } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -16,13 +16,14 @@ export default function App() {
     return [
       {
         role: 'assistant',
-        content: `### Welcome to CyberQwen AI (8B-v3)\n\nI am your specialized cybersecurity AI pair-programmer and operational assistant.\n\n**Core Capabilities:**\n- 🛡️ **Vulnerability Triage**: Root-cause analysis for CISA KEV, CWEs, and zero-day vulnerabilities.\n- 💻 **Offensive Mechanics**: 64-bit ROP chain synthesis, Glibc heap exploitation, padding oracles.\n- 🔍 **Defensive Engineering**: Volatility 3 memory forensics, YARA rules, and secure code review.\n- 🏆 **CTF Solving**: Fast solver scripts for Crypto, Web, Pwn, Reverse, and Forensics.\n\n*Type a question, click a preset action, or upload a target file to begin.*`
+        content: `### Welcome to CyberQwen AI (8B-v3)\n\nI am your specialized cybersecurity AI pair-programmer and operational assistant.\n\n**Evidence Analysis Pipeline Ready:**\n- 📦 **ZIP / Multi-File Extraction**: Safely unpacks archives, extracts source files, and indexes binary headers.\n- 🏆 **CTF Challenge Solver**: Identifies flaws, cryptographic weaknesses, and outputs flag extraction approaches.\n- 🛡️ **Vulnerability Triage**: Analyzes root causes and writes secure patches.\n\n*Upload a .zip challenge or type your query below.*`
       }
     ];
   });
 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(null);
   const [systemStatus, setSystemStatus] = useState('checking');
   const [device, setDevice] = useState('detecting');
   const [totalTokens, setTotalTokens] = useState(0);
@@ -32,7 +33,7 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('cyberqwen_chat_history', JSON.stringify(messages));
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, analysisProgress]);
 
   useEffect(() => {
     checkHealth();
@@ -65,7 +66,6 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      // Send history (excluding system welcome message)
       const historyPayload = messages.slice(1).map((m) => ({ role: m.role, content: m.content }));
 
       const res = await fetch(`${API_BASE}/chat`, {
@@ -79,9 +79,7 @@ export default function App() {
         })
       });
 
-      if (!res.ok) {
-        throw new Error(`API returned HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`API returned HTTP ${res.status}`);
 
       const data = await res.json();
       const botMessage = {
@@ -91,17 +89,14 @@ export default function App() {
         tokens: data.tokens
       };
 
-      if (data.tokens) {
-        setTotalTokens((prev) => prev + data.tokens);
-      }
-
+      if (data.tokens) setTotalTokens((prev) => prev + data.tokens);
       setMessages((prev) => [...prev, botMessage]);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: `⚠️ **Connection Error**: Unable to reach CyberQwen backend at \`${API_BASE}\`. Ensure the FastAPI server is running with \`uvicorn backend.main:app --port 8000\`.\n\n*Details: ${err.message}*`
+          content: `⚠️ **Connection Error**: Unable to reach CyberQwen backend at \`${API_BASE}\`. Ensure FastAPI is running on port 8000.\n\n*Details: ${err.message}*`
         }
       ]);
     } finally {
@@ -117,7 +112,6 @@ export default function App() {
       cve_explainer: "Explain the technical root cause, CVSS score impact, and vendor patch mitigation for CVE: ",
       ctf_assistant: "Analyze this CTF challenge problem and provide a step-by-step strategy with Python exploit code:\n\n"
     };
-
     setInput(promptMap[actionId] || "");
   };
 
@@ -125,9 +119,22 @@ export default function App() {
     setIsUploadOpen(false);
     setIsLoading(true);
 
+    // Initial Evidence Progress UI Panel
+    setAnalysisProgress({
+      fileName: file.name,
+      fileSize: (file.size / 1024).toFixed(1) + ' KB',
+      steps: [
+        { label: 'File received', status: 'done' },
+        { label: 'Archive extracted', status: 'running' },
+        { label: 'Files indexed', status: 'pending' },
+        { label: 'Context generated', status: 'pending' },
+        { label: 'CyberQwen analyzing', status: 'pending' }
+      ]
+    });
+
     const userMessage = {
       role: 'user',
-      content: `📁 **Uploaded Target File**: \`${file.name}\` (${(file.size / 1024).toFixed(1)} KB)\n**Action**: \`${action}\`${customPrompt ? `\n**Prompt**: ${customPrompt}` : ''}`
+      content: `📁 **Uploaded Evidence Target**: \`${file.name}\` (${(file.size / 1024).toFixed(1)} KB)\n**Action**: \`${action}\`${customPrompt ? `\n**Directive**: ${customPrompt}` : ''}`
     };
     setMessages((prev) => [...prev, userMessage]);
 
@@ -137,6 +144,20 @@ export default function App() {
       formData.append('action', action);
       if (customPrompt) formData.append('custom_prompt', customPrompt);
 
+      // Transition step states to active analysis
+      setTimeout(() => {
+        setAnalysisProgress((prev) => prev ? ({
+          ...prev,
+          steps: [
+            { label: 'File received', status: 'done' },
+            { label: 'Archive extracted', status: 'done' },
+            { label: 'Files indexed', status: 'done' },
+            { label: 'Context generated', status: 'done' },
+            { label: 'CyberQwen analyzing', status: 'running' }
+          ]
+        }) : null);
+      }, 600);
+
       const res = await fetch(`${API_BASE}/upload`, {
         method: 'POST',
         body: formData
@@ -145,9 +166,17 @@ export default function App() {
       if (!res.ok) throw new Error(`Upload returned status ${res.status}`);
 
       const data = await res.json();
+
+      let extractedInfoBlock = '';
+      if (data.file_names && data.file_names.length > 0) {
+        extractedInfoBlock = `#### 📦 Extracted Evidence Files (${data.file_count}):\n` +
+          data.file_names.map(f => `- \`${f}\``).join('\n') +
+          `\n\n---\n\n`;
+      }
+
       const botMessage = {
         role: 'assistant',
-        content: data.response,
+        content: extractedInfoBlock + data.response,
         latency_ms: data.latency_ms,
         tokens: data.tokens
       };
@@ -164,6 +193,7 @@ export default function App() {
       ]);
     } finally {
       setIsLoading(false);
+      setAnalysisProgress(null);
     }
   };
 
@@ -193,7 +223,6 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-[#080c14] text-slate-100 font-sans">
-      {/* Header Bar */}
       <Header
         status={systemStatus}
         device={device}
@@ -203,23 +232,45 @@ export default function App() {
         conversationLength={messages.length}
       />
 
-      {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {messages.map((msg, idx) => (
           <ChatMessage key={idx} message={msg} />
         ))}
 
-        {isLoading && (
+        {/* Evidence Analysis Progress Panel */}
+        {analysisProgress && (
+          <div className="py-5 px-6 bg-cyan-950/30 border-y border-cyber-cyan/40 backdrop-blur-md">
+            <div className="max-w-4xl mx-auto space-y-3">
+              <div className="flex items-center gap-2 text-cyber-cyan font-mono text-xs font-bold uppercase tracking-wider">
+                <FolderArchive className="w-4 h-4 animate-pulse text-cyber-neon" />
+                <span>Analyzing uploaded evidence... <span className="text-white">({analysisProgress.fileName})</span></span>
+              </div>
+              <div className="text-xs font-mono text-slate-400 font-semibold mb-1">Progress:</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2">
+                {analysisProgress.steps.map((st, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs font-mono px-3 py-2 rounded-lg bg-cyber-dark/80 border border-cyber-border">
+                    {st.status === 'done' && <Check className="w-3.5 h-3.5 text-cyber-neon flex-shrink-0" />}
+                    {st.status === 'running' && <Loader2 className="w-3.5 h-3.5 text-cyber-cyan animate-spin flex-shrink-0" />}
+                    {st.status === 'pending' && <span className="w-3.5 h-3.5 rounded-full border border-slate-600 inline-block flex-shrink-0"></span>}
+                    <span className={st.status === 'done' ? 'text-slate-200' : (st.status === 'running' ? 'text-cyber-cyan font-semibold' : 'text-slate-500')}>
+                      {st.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isLoading && !analysisProgress && (
           <div className="py-5 px-6 bg-cyber-card/60 border-b border-cyber-border">
             <div className="max-w-4xl mx-auto flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-cyan-950/60 border border-cyber-neon/40 flex items-center justify-center text-cyber-neon">
                 <Loader2 className="w-4 h-4 animate-spin text-cyber-cyan" />
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-cyber-cyan animate-pulse">
-                  CyberQwen analyzing security mechanics & generating response...
-                </span>
-              </div>
+              <span className="text-xs font-mono text-cyber-cyan animate-pulse">
+                CyberQwen analyzing security mechanics & generating response...
+              </span>
             </div>
           </div>
         )}
@@ -227,19 +278,16 @@ export default function App() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input & Action Panel */}
       <div className="border-t border-cyber-border bg-[#0a0d16]/95 backdrop-blur-md p-4">
         <div className="max-w-4xl mx-auto space-y-2.5">
-          {/* Preset Buttons */}
           <QuickActions onSelectAction={handleSelectQuickAction} disabled={isLoading} />
 
-          {/* Text Input & Controls */}
           <div className="relative flex items-center gap-2">
             <button
               onClick={() => setIsUploadOpen(true)}
               disabled={isLoading}
-              title="Upload file for analysis"
-              className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-cyan-400 transition-all disabled:opacity-50"
+              title="Upload file or ZIP archive for analysis"
+              className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-cyan-400 transition-all disabled:opacity-50 shadow-sm"
             >
               <Upload className="w-5 h-5" />
             </button>
@@ -254,7 +302,7 @@ export default function App() {
                     handleSendMessage();
                   }
                 }}
-                placeholder="Ask CyberQwen about CVEs, CTF challenges, ROP chains, or paste source code..."
+                placeholder="Ask CyberQwen about CVEs, CTF challenges, ROP chains, or upload a .zip archive..."
                 rows={1}
                 disabled={isLoading}
                 className="w-full px-4 py-3 rounded-xl bg-cyber-dark/90 border border-slate-700 focus:border-cyber-cyan focus:ring-1 focus:ring-cyber-cyan text-sm text-slate-100 font-mono placeholder:text-slate-500 resize-none transition-all outline-none"
@@ -277,7 +325,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* File Upload Modal */}
       <FileUploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
