@@ -13,34 +13,33 @@ CyberQwen-AI/
 ├── Modelfile                     # Ollama configuration and system instructions
 ├── README.md                     # Complete pipeline documentation
 ├── requirements.txt              # Standardized dependency specifications
-├── ollama_builder.py             # Dataset generation via local Ollama
+├── start_backend.bat             # 1-click FastAPI backend launcher (Port 8000)
+├── start_frontend.bat            # 1-click React + Vite UI launcher (Port 5173)
+│
+├── backend/                      # FastAPI Live Inference & Analysis REST API
+│   ├── main.py                   # REST endpoints (/health, /chat, /upload, /analyze)
+│   ├── model_service.py          # In-memory CyberQwen-Merged runner & document parser
+│   └── test_api_suite.py         # Automated endpoint test suite
+│
+├── frontend/                     # Futuristic CyberQwen Web Interface (React + Vite)
+│   ├── src/                      # Glassmorphism, Tailwind, Neon accents & Chat components
+│   ├── package.json              # Frontend package definitions
+│   └── vite.config.js            # Vite configuration
+│
 ├── dataset/
-│   ├── cleaned/                  # De-duplicated, normalized JSONL samples
-│   ├── ctf/                      # CTF challenge datasets
-│   ├── generated/                # Category datasets (crypto, forensics, etc.)
-│   ├── linux_security/           # Privilege escalation and hardening datasets
-│   ├── malware_analysis/         # Malware evasion and signature datasets
-│   ├── merged/                   # Training splits (train.jsonl, val.jsonl)
-│   ├── reverse_engineering/      # Disassembly and decompilation datasets
-│   ├── secure_coding/            # Static analysis and remediation datasets
-│   ├── vulnerability_reports/    # CVE and exploitation datasets
-│   └── web_security/             # Web application security datasets
+│   ├── final/                    # Production 4-tier progressive curriculum (v3)
+│   │   ├── train_v3.jsonl        # 2,282 clean unique samples (0 duplicates)
+│   │   └── validation_v3.jsonl   # 252 clean unique samples (0 leakage)
+│   ├── raw/                      # CISA KEV, YARA rules, OWASP security corpus
+│   └── processed/                # Normalized cybersecurity datasets
+│
 ├── models/
-│   ├── CyberQwen-LoRA/           # Trained 4-bit LoRA adapter weights
-│   ├── CyberQwen-Merged/         # Fully merged standalone model weights
-│   └── eval_report.json          # Benchmark evaluation outputs
-└── scripts/
-    ├── clean_dataset.py          # Data normalization and deduplication
-    ├── create_ollama_model.py    # Modelfile generation and Ollama model builder
-    ├── dataset_validator.py      # Schema and format validator
-    ├── evaluate_model.py         # Multi-domain benchmark evaluation suite
-    ├── export_lora.py            # LoRA adapter merger and HF exporter
-    ├── generate_dataset.py       # Multi-threaded synthetic dataset generator
-    ├── merge_dataset.py          # Train/Validation dataset splitter
-    ├── qlora_config.yaml         # Training hyperparameter configuration
-    ├── test_prompts.json         # Benchmark questions across 6 core domains
-    ├── train_qlora.py            # SFTTrainer QLoRA 4-bit training pipeline
-    └── validate_dataset.py       # JSONL integrity verification
+│   ├── CyberQwen-Merged/         # Fully merged standalone model weights (model.safetensors)
+│   ├── test-CyberQwen-LoRA/      # Validated LoRA adapter weights & checkpoints
+│   └── CyberQwen-LoRA/           # Active training output directory
+│
+├── logs/                         # Benchmark evaluations and telemetry metrics
+└── scripts/                      # Complete QLoRA fine-tuning & evaluation tooling
 ```
 
 ---
@@ -62,8 +61,32 @@ cd C:\Users\KIIT\Desktop\CyberQwen-AI
 .\.venv\Scripts\Activate.ps1
 
 # 3. Verify packages
-python -c "import torch, transformers, peft, trl, bitsandbytes, ollama, aider; print('Environment Ready!')"
+python -c "import torch, transformers, peft, trl, bitsandbytes, fastapi, uvicorn; print('Environment Ready!')"
 ```
+
+---
+
+## 🌐 1-Click Live Web Interface & REST API
+
+CyberQwen-AI provides a live local web interface with chat, file analysis dropzone, and presets.
+
+### Quick Start (Double-Click Batch Scripts)
+1. **Launch Backend**: Double-click `start_backend.bat` (Starts FastAPI at `http://localhost:8000`)
+2. **Launch Frontend**: Double-click `start_frontend.bat` (Starts React/Vite at `http://localhost:5173`)
+
+### Manual Start
+```powershell
+# Terminal 1: Start FastAPI REST API Server
+.\.venv\Scripts\Activate.ps1
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
+
+# Terminal 2: Start Vite React Web Interface
+cd frontend
+npm run dev
+```
+
+- **Frontend URL**: 👉 `http://localhost:5173`
+- **Backend API & Swagger Docs**: 👉 `http://localhost:8000/docs`
 
 ---
 
