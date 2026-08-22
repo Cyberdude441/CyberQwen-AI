@@ -42,6 +42,7 @@ export default function Header({
             className="bg-transparent text-cyber-neon font-semibold outline-none cursor-pointer"
           >
             <option value="hybrid" className="bg-cyber-dark text-slate-200">Hybrid (CyberQwen + Nemotron + Gemini)</option>
+            <option value="benchmark" className="bg-cyber-dark text-cyan-400 font-bold">🏆 Independent Benchmark (CyberQwen vs Nemotron vs Gemini)</option>
             <option value="local" className="bg-cyber-dark text-slate-200">CyberQwen Local Only</option>
             <option value="nemotron" className="bg-cyber-dark text-slate-200">Nemotron Reasoning Agent</option>
             <option value="gemini" className="bg-cyber-dark text-slate-200">Gemini Verification Agent</option>

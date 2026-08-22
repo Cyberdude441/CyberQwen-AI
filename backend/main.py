@@ -1,6 +1,7 @@
 """
 CyberQwen-AI: FastAPI Live REST API Server
-Provides endpoints for conversational chat, multi-model collaborative analysis, and health telemetry.
+Provides endpoints for conversational chat, multi-model collaborative analysis,
+independent multi-model CTF benchmarking, and health telemetry.
 """
 
 import os
@@ -14,11 +15,12 @@ from pydantic import BaseModel
 from backend.model_service import CyberQwenService
 from backend.archive_processor import process_file_or_zip
 from backend.reasoning_orchestrator import MultiModelReasoningOrchestrator
+from backend.independent_benchmark import IndependentBenchmarkEngine
 
 app = FastAPI(
-    title="CyberQwen-AI Multi-Model Reasoning Backend",
-    description="Collaborative intelligence platform powering CyberQwen-8B, NVIDIA Nemotron, and Google Gemini",
-    version="2.0.0"
+    title="CyberQwen-AI Multi-Model Reasoning & Benchmark Backend",
+    description="Independent benchmark and collaborative intelligence platform powering CyberQwen-8B, NVIDIA Nemotron, and Google Gemini",
+    version="2.1.0"
 )
 
 app.add_middleware(
@@ -31,6 +33,7 @@ app.add_middleware(
 
 cyber_service = CyberQwenService()
 orchestrator = MultiModelReasoningOrchestrator(cyber_service)
+benchmark_engine = IndependentBenchmarkEngine(cyber_service)
 
 class ChatMessage(BaseModel):
     role: str
@@ -60,7 +63,7 @@ def root():
             "reasoning": "NVIDIA Nemotron-70B",
             "verification": "Google Gemini 1.5/2.0 Flash"
         },
-        "endpoints": ["/health", "/chat", "/upload", "/analyze"]
+        "endpoints": ["/health", "/chat", "/upload", "/benchmark"]
     }
 
 @app.get("/health")
@@ -71,7 +74,8 @@ def health():
         "weights_path": str(cyber_service.model_path),
         "device": cyber_service.device,
         "is_loaded": cyber_service.is_loaded,
-        "multi_model_ready": True
+        "multi_model_ready": True,
+        "benchmark_ready": True
     }
 
 @app.post("/chat")
@@ -91,6 +95,34 @@ def chat(payload: ChatRequest):
         temperature=payload.temperature or 0.7
     )
     return result
+
+@app.post("/benchmark")
+async def benchmark_endpoint(
+    file: UploadFile = File(...)
+):
+    try:
+        content_bytes = await file.read()
+        filename = file.filename or "target_challenge.zip"
+        
+        extracted = process_file_or_zip(filename, content_bytes)
+        benchmark_result = benchmark_engine.run_benchmark(filename, extracted)
+        
+        return {
+            "filename": filename,
+            "mode": "benchmark",
+            "is_archive": extracted["is_archive"],
+            "file_names": extracted.get("file_names", []),
+            "file_count": extracted.get("file_count", len(extracted.get("file_names", []))),
+            "response": benchmark_result["response"],
+            "consensus": benchmark_result["consensus"],
+            "winner": benchmark_result["winner"],
+            "results": benchmark_result["results"],
+            "tokens": benchmark_result["tokens"],
+            "latency_ms": benchmark_result["latency_ms"]
+        }
+    except Exception as e:
+        print(f"[!] Benchmark error: {e}")
+        raise HTTPException(status_code=500, detail=f"Benchmark error: {str(e)}")
 
 @app.post("/upload")
 async def upload_file(
@@ -116,7 +148,27 @@ async def upload_file(
         print("MODEL INPUT:\nverified")
         print("=" * 60 + "\n")
 
-        # 3. Multi-Model Reasoning Pipeline Execution
+        # 3. If mode is benchmark, execute independent 3-model benchmark
+        if mode == "benchmark" or action == "benchmark":
+            benchmark_result = benchmark_engine.run_benchmark(filename, extracted)
+            return {
+                "filename": filename,
+                "action": action,
+                "mode": "benchmark",
+                "is_archive": extracted["is_archive"],
+                "file_names": extracted.get("file_names", []),
+                "file_count": extracted.get("file_count", len(extracted.get("file_names", []))),
+                "files_metadata": extracted.get("files_metadata", []),
+                "discovered_flags": extracted.get("discovered_flags", []),
+                "estimated_tokens": extracted.get("estimated_tokens", 100),
+                "response": benchmark_result["response"],
+                "consensus": benchmark_result["consensus"],
+                "winner": benchmark_result["winner"],
+                "tokens": benchmark_result["tokens"],
+                "latency_ms": benchmark_result["latency_ms"]
+            }
+
+        # 4. Multi-Model Reasoning Pipeline Execution
         orchestrator_result = orchestrator.execute_reasoning_pipeline(
             filename=filename,
             extracted_data=extracted,

@@ -93,6 +93,7 @@ export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading, 
               className="w-full px-3 py-2 rounded-lg bg-cyber-dark/80 border border-slate-700 text-sm text-cyber-neon font-mono focus:outline-none focus:border-cyber-cyan"
             >
               <option value="hybrid">⚡ Hybrid Mode (CyberQwen + Nemotron + Gemini Consensus)</option>
+              <option value="benchmark">🏆 Independent Benchmark (CyberQwen vs Nemotron vs Gemini)</option>
               <option value="local">🖥️ CyberQwen Local Model Only</option>
               <option value="nemotron">🧠 NVIDIA Nemotron Reasoning Agent</option>
               <option value="gemini">🛡️ Google Gemini Verification Agent</option>
