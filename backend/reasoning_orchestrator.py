@@ -28,6 +28,7 @@ class MultiModelReasoningOrchestrator:
         recovered_flags_map = extracted_data.get("recovered_flags", {})
         discovered_flags = list(recovered_flags_map.keys()) if recovered_flags_map else extracted_data.get("discovered_flags", [])
         actions_performed = extracted_data.get("actions_performed", [])
+        password_attempts_log = extracted_data.get("password_attempts_log", [])
         hypotheses = extracted_data.get("hypotheses", [])
         
         initial_flag = discovered_flags[0] if discovered_flags else None
@@ -68,13 +69,28 @@ class MultiModelReasoningOrchestrator:
         # Format Actions Performed Checklist
         actions_list_str = "\n".join([f"✓ {act}" for act in actions_performed]) if actions_performed else "✓ Inspected file structure and metadata"
 
+        # Format Password Intelligence & Attempts Section
+        pwd_section_bullets = []
+        if password_attempts_log:
+            # Show successful first, then sample of tested
+            success_attempts = [p for p in password_attempts_log if p["status"] == "success"]
+            failed_attempts = [p for p in password_attempts_log if p["status"] == "failed"]
+            
+            for f_att in failed_attempts[:3]:
+                pwd_section_bullets.append(f"- Candidate: `{f_att['password']}` ({f_att['source']} - Confidence: {f_att['confidence']}%): ✗ failed")
+            
+            for s_att in success_attempts:
+                pwd_section_bullets.append(f"- Candidate: `{s_att['password']}` ({s_att['source']} - Confidence: {s_att['confidence']}%): ✓ success (Decrypted `{s_att['unlocked_file']}`)")
+        
+        pwd_section_str = "\n".join(pwd_section_bullets) if pwd_section_bullets else "- No encrypted archive requiring password intelligence encountered."
+
         # Format Evidence Summary
         evidence_bullets = [
             f"- **Target Package**: `{filename}` ({extracted_data.get('file_count', 1)} files)",
             f"- **Discovered Files**: {', '.join([f'`{fn}`' for fn in extracted_data.get('file_names', [])])}"
         ]
         if extracted_data.get("password_candidates"):
-            evidence_bullets.append(f"- **Harvested Passphrase Clues**: `{', '.join(extracted_data['password_candidates'])}`")
+            evidence_bullets.append(f"- **Harvested Intercept Clues / DTMF**: `{', '.join(extracted_data['password_candidates'])}`")
         for hyp in hypotheses:
             evidence_bullets.append(f"- **Hypothesis Tested**: {hyp['finding']} -> {hyp['hypothesis']} (**Result: {hyp['result']}**)")
         
@@ -107,6 +123,8 @@ class MultiModelReasoningOrchestrator:
             f"{files_analyzed_str}\n\n\n"
             f"Actions performed:\n"
             f"{actions_list_str}\n\n\n"
+            f"Password Intelligence & Attempts:\n"
+            f"{pwd_section_str}\n\n\n"
             f"Evidence:\n"
             f"{evidence_str}\n\n\n"
             f"Verification:\n"

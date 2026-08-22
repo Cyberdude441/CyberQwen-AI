@@ -1,7 +1,7 @@
 """
 CyberQwen-AI: Production Archive Processor & Forensic Auto-Solver Pipeline
 Coordinates Phase 1 (File Triage & Extraction) and Phase 2 (Automated Solving Engine)
-with full recursive decryption of nested archives.
+with Password Intelligence (mutations, permutations, ranking, and recursive decryption).
 """
 
 import os
@@ -14,7 +14,7 @@ import hashlib
 import base64
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple, Set
-from backend.active_solver import ProductionCTFSolver, FLAG_PATTERN
+from backend.active_solver import ProductionCTFSolver, FLAG_PATTERN, PasswordCandidate
 
 TEXT_EXTENSIONS = {
     ".py", ".c", ".cpp", ".cc", ".h", ".hpp", ".js", ".ts", ".jsx", ".tsx",
@@ -88,8 +88,8 @@ def analyze_text_document(filename: str, content: str, solver: ProductionCTFSolv
     """Deep text inspection & active solving across encodings, ciphers, and reverse engineering."""
     findings = []
 
-    # 1. Harvest Password Clues
-    solver.harvest_password_candidates(filename, content)
+    # 1. Harvest Clues
+    solver.harvest_clues_from_text(filename, content)
 
     # 2. Run Crypto Module
     solver.execute_crypto_module(content, filename)
@@ -110,9 +110,10 @@ def analyze_text_document(filename: str, content: str, solver: ProductionCTFSolv
 def inspect_and_crack_zip(
     filename: str,
     zip_bytes: bytes,
-    solver: ProductionCTFSolver
+    solver: ProductionCTFSolver,
+    files_discovered: List[str]
 ) -> Dict[str, Any]:
-    """Inspects ZIP compression, detects encryption, and tests password candidates."""
+    """Inspects ZIP compression, detects encryption, and tests ranked intelligent password candidates."""
     extracted_members = []
     is_encrypted = False
     compression_types = set()
@@ -152,34 +153,59 @@ def inspect_and_crack_zip(
                     except Exception:
                         pass
 
-            # Active Password Cracking / Testing
+            # Active Password Intelligence & Testing
             if is_encrypted:
                 solver.log_action(f"Detected encryption in `{filename}`")
-                solver.log_action("Generated password candidates from harvested clues")
+                candidates = solver.generate_intelligent_passwords(files_discovered)
+                solver.log_action(f"Generated {len(candidates)} ranked password candidates via Password Intelligence Engine")
                 
-                for candidate in list(solver.password_candidates):
-                    solver.log_action(f"Tested password candidate `{candidate}` against `{filename}`")
+                decrypted = False
+                for cand in candidates:
+                    pwd = cand.password
                     try:
-                        zf.setpassword(candidate.encode("utf-8"))
+                        zf.setpassword(pwd.encode("utf-8"))
                         first_name = extracted_members[0]["filename"]
                         decrypted_data = zf.read(first_name)
                         decrypted_text = decrypted_data.decode("utf-8", errors="replace")
                         
-                        # Solve against decrypted payload
-                        solver.execute_crypto_module(decrypted_text, f"{filename}/{first_name}")
-                        solver.execute_reverse_engineering_module(decrypted_text, f"{filename}/{first_name}")
-                        unlocked_files.append((first_name, decrypted_text[:2000]))
+                        # Decryption Success!
+                        solver.password_attempts_log.append({
+                            "password": pwd,
+                            "source": cand.source,
+                            "confidence": cand.confidence,
+                            "status": "success",
+                            "unlocked_file": first_name
+                        })
                         
-                        solver.log_action(f"Decoded hidden content from `{filename}` with password `{candidate}`")
+                        solver.log_action(f"Successfully decrypted `{filename}` with password `{pwd}` ({cand.source})")
                         solver.log_hypothesis(
-                            finding=f"Encrypted archive `{filename}` found alongside clue `{candidate}`",
-                            hypothesis=f"`{candidate}` is the archive passphrase",
-                            test=f"Attempt extraction of `{first_name}` with password",
+                            finding=f"Encrypted archive `{filename}`",
+                            hypothesis=f"Password candidate `{pwd}` ({cand.source}) matches archive key",
+                            test=f"Extract `{first_name}` with password",
                             result=f"Success -> Decrypted {len(decrypted_data)} bytes"
                         )
+
+                        # Recursively solve all members in unlocked archive
+                        for mem in extracted_members:
+                            try:
+                                m_data = zf.read(mem["filename"])
+                                m_text = m_data.decode("utf-8", errors="replace")
+                                solver.execute_crypto_module(m_text, f"{filename}/{mem['filename']}")
+                                solver.execute_reverse_engineering_module(m_text, f"{filename}/{mem['filename']}")
+                                unlocked_files.append((mem["filename"], m_text[:2000]))
+                            except Exception:
+                                pass
+
+                        decrypted = True
                         break
                     except Exception:
-                        pass
+                        solver.password_attempts_log.append({
+                            "password": pwd,
+                            "source": cand.source,
+                            "confidence": cand.confidence,
+                            "status": "failed",
+                            "unlocked_file": None
+                        })
 
     except Exception as e:
         return {
@@ -198,9 +224,9 @@ def inspect_and_crack_zip(
 
 def process_file_or_zip(filename: str, content_bytes: bytes) -> Dict[str, Any]:
     """
-    Master active investigation engine:
+    Master active investigation engine with Password Intelligence:
     Phase 1: File Triage & Extraction
-    Phase 2: Automated Multi-Module Solving Engine (Crypto, Forensics, Audio, Reverse Engineering)
+    Phase 2: Automated Multi-Module Solving Engine (Password Intelligence, Crypto, Forensics, Audio, Reverse Engineering)
     """
     solver = ProductionCTFSolver()
     ext = Path(filename).suffix.lower()
@@ -215,7 +241,7 @@ def process_file_or_zip(filename: str, content_bytes: bytes) -> Dict[str, Any]:
         solver.log_action(f"Extracted master ZIP archive `{filename}`")
         try:
             with zipfile.ZipFile(io.BytesIO(content_bytes)) as master_zf:
-                # Pass 1: Harvest initial text clues & password candidates across all files
+                # Pass 1: Harvest initial text & audio clues across all files
                 for info in master_zf.infolist():
                     if info.is_dir():
                         continue
@@ -232,8 +258,10 @@ def process_file_or_zip(filename: str, content_bytes: bytes) -> Dict[str, Any]:
                             analyze_text_document(clean_name, text_str, solver)
                         except Exception:
                             pass
+                    elif sub_ext == ".wav" or sub_data[:4] == b"RIFF":
+                        analyze_wav_audio(clean_name, sub_data, solver)
 
-                # Pass 2: Comprehensive deep inspection & solving
+                # Pass 2: Deep inspection & Password Intelligence cracking
                 for info in master_zf.infolist():
                     if info.is_dir():
                         continue
@@ -247,7 +275,7 @@ def process_file_or_zip(filename: str, content_bytes: bytes) -> Dict[str, Any]:
                     
                     # Case A: Nested ZIP Archive
                     if sub_ext == ".zip" or sub_data[:4] == b"PK\x03\x04":
-                        zip_res = inspect_and_crack_zip(clean_name, sub_data, solver)
+                        zip_res = inspect_and_crack_zip(clean_name, sub_data, solver, files_discovered)
                         status_str = "Encrypted (Password Protected)" if zip_res.get("is_encrypted") else "Unencrypted Archive"
                         member_list_str = "\n".join([f"    - {m['filename']} ({m['file_size']} bytes, CRC: {m['crc32']})" for m in zip_res.get("members", [])])
                         
@@ -388,7 +416,8 @@ def process_file_or_zip(filename: str, content_bytes: bytes) -> Dict[str, Any]:
         "file_count": len(files_discovered),
         "recovered_flags": solver.recovered_flags,
         "discovered_flags": list(solver.recovered_flags.keys()),
-        "password_candidates": list(solver.password_candidates),
+        "password_candidates": list(solver.raw_clues),
+        "password_attempts_log": solver.password_attempts_log,
         "actions_performed": solver.actions_performed,
         "hypotheses": solver.hypotheses,
         "manifest": complete_manifest,

@@ -1,6 +1,7 @@
 """
 CyberQwen-AI: Production Active CTF Investigation & Auto-Solver Engine
 Autonomous multi-module solver covering:
+- Password Intelligence Module (Mutations, combinations, ranking, context permutation)
 - Crypto Module (Base64, Base32, Base85, Hex, Binary, URL, ROT1-25, Atbash, XOR single/multi-byte)
 - Forensics Module (ZIP encryption, comments, password candidate harvesting, recursive decryption)
 - Audio Module (WAV metadata, spectrogram bandwidth, DTMF, Morse code)
@@ -69,12 +70,20 @@ def decode_morse(morse_str: str) -> str:
             decoded_words.append("".join(decoded_chars))
     return " ".join(decoded_words)
 
+class PasswordCandidate:
+    def __init__(self, password: str, source: str, confidence: int):
+        self.password = password
+        self.source = source
+        self.confidence = confidence
+
 class ProductionCTFSolver:
     def __init__(self):
         self.actions_performed: List[str] = []
         self.hypotheses: List[Dict[str, str]] = []
         self.recovered_flags: Dict[str, str] = {}  # flag -> source_file
-        self.password_candidates: Set[str] = set()
+        self.raw_clues: Set[str] = set()
+        self.context_words: Set[str] = {"cyber", "agent", "flag", "password", "secret", "admin", "vault", "root", "user", "ctf"}
+        self.password_attempts_log: List[Dict[str, Any]] = []
 
     def log_action(self, action: str):
         if action not in self.actions_performed:
@@ -92,6 +101,82 @@ class ProductionCTFSolver:
         if flag not in self.recovered_flags:
             self.recovered_flags[flag] = source_file
             self.log_action(f"Recovered flag via {method}: `{flag}`")
+
+    # =========================================================================
+    # PASSWORD INTELLIGENCE MODULE
+    # =========================================================================
+    def generate_intelligent_passwords(self, filenames: List[str]) -> List[PasswordCandidate]:
+        """
+        Generates intelligent password mutations, context combinations, and rankings.
+        """
+        candidates: Dict[str, PasswordCandidate] = {}
+
+        # Add base context words from discovered filenames
+        for fn in filenames:
+            stem = Path(fn).stem.lower()
+            if stem and len(stem) >= 2:
+                self.context_words.add(stem)
+
+        for clue in list(self.raw_clues):
+            if not clue or len(clue) > 40:
+                continue
+
+            # 1. Exact Candidate (Confidence 90-95%)
+            if clue not in candidates:
+                candidates[clue] = PasswordCandidate(clue, "Direct Intercepted Clue / DTMF", 90)
+
+            # 2. Formatting Variations (Confidence 85%)
+            for sym in ["!", "@", "#", "$", "_", "123", "."]:
+                v = f"{clue}{sym}"
+                if v not in candidates:
+                    candidates[v] = PasswordCandidate(v, f"Formatting variation ({sym})", 85)
+                v_pre = f"{sym}{clue}"
+                if v_pre not in candidates:
+                    candidates[v_pre] = PasswordCandidate(v_pre, f"Prefix variation ({sym})", 80)
+
+            # 3. Numeric Transformations (if digit string)
+            if clue.isdigit():
+                num_vars = [
+                    (f"0{clue}", "Zero-padded prefix", 85),
+                    (f"{clue}0", "Zero-padded suffix", 85),
+                    (clue[::-1], "Reversed digits", 80)
+                ]
+                if len(clue) == 4:
+                    num_vars.append((clue[2:] + clue[:2], "Permuted digit pair", 75))
+                
+                for nv, desc, conf in num_vars:
+                    if nv not in candidates:
+                        candidates[nv] = PasswordCandidate(nv, desc, conf)
+
+            # 4. Word + Number Combinations (Confidence 95%)
+            for w in list(self.context_words):
+                if not w or w == clue:
+                    continue
+                
+                # word + number (e.g. cyber5818, cyber_5818)
+                c1 = f"{w}{clue}"
+                c2 = f"{w}_{clue}"
+                c3 = f"{w.capitalize()}{clue}"
+                c4 = f"{w.upper()}{clue}"
+                
+                # number + word (e.g. 5818cyber, 5818_agent)
+                c5 = f"{clue}{w}"
+                c6 = f"{clue}_{w}"
+
+                for comb, desc, conf in [
+                    (c1, f"Keyword '{w}' + clue '{clue}'", 95),
+                    (c2, f"Keyword '{w}' + '_' + clue '{clue}'", 92),
+                    (c3, f"Title '{w.capitalize()}' + clue '{clue}'", 90),
+                    (c4, f"Upper '{w.upper()}' + clue '{clue}'", 88),
+                    (c5, f"Clue '{clue}' + keyword '{w}'", 88),
+                    (c6, f"Clue '{clue}' + '_' + keyword '{w}'", 86)
+                ]:
+                    if comb not in candidates:
+                        candidates[comb] = PasswordCandidate(comb, desc, conf)
+
+        # Sort by confidence descending, then by length
+        sorted_list = sorted(candidates.values(), key=lambda x: (x.confidence, -len(x.password)), reverse=True)
+        return sorted_list
 
     # =========================================================================
     # 1. CRYPTO MODULE
@@ -128,9 +213,8 @@ class ProductionCTFSolver:
                             test="base64.b64decode()",
                             result=f"Success -> `{f}`"
                         )
-                    # Also register as password candidate if compact
                     if 4 <= len(dec) <= 32 and " " not in dec and dec.isprintable():
-                        self.password_candidates.add(dec)
+                        self.raw_clues.add(dec)
                 except Exception:
                     pass
 
@@ -171,7 +255,7 @@ class ProductionCTFSolver:
             except Exception:
                 pass
 
-        # G. Binary Strings (e.g. 01000110 01001100 01000001 01000111)
+        # G. Binary Strings
         bin_matches = re.findall(r"([01]{8}(?:\s+[01]{8}){3,})", text)
         for bm in bin_matches[:5]:
             try:
@@ -200,7 +284,6 @@ class ProductionCTFSolver:
         for line in text.splitlines():
             line_bytes = line.strip().encode("utf-8")
             if len(line_bytes) >= 8:
-                # 1. Single-byte XOR brute force 1-255
                 for key in range(1, 256):
                     try:
                         dec_bytes = bytes([b ^ key for b in line_bytes])
@@ -210,8 +293,7 @@ class ProductionCTFSolver:
                     except Exception:
                         pass
                 
-                # 2. Multi-byte XOR with discovered password candidates
-                for pwd in self.password_candidates:
+                for pwd in self.raw_clues:
                     if pwd:
                         try:
                             dec_xor = xor_bytes(line_bytes, pwd.encode("utf-8")).decode("utf-8", errors="ignore")
@@ -269,30 +351,39 @@ class ProductionCTFSolver:
         """Analyzes audio metadata, DTMF dial tone indicators, Morse code, and chunks."""
         self.log_action(f"Analyzed audio stream specifications for `{filename}`")
         
-        # A. Check for Morse code in strings or metadata
+        # Morse Code in strings or metadata
         morse_patterns = re.findall(r"([.\-]{1,6}(?:\s+[.\-]{1,6})+)", embedded_strings)
         for mp in morse_patterns:
             decoded_morse = decode_morse(mp)
             for f in FLAG_PATTERN.findall(decoded_morse):
                 self.record_flag(f, filename, "Morse Code Audio Demodulation")
 
-        # B. Check for DTMF tone markers
-        if b"DTMF" in audio_bytes or "dtmf" in filename.lower() or "voicemail" in filename.lower():
-            numbers = re.findall(r"\b\d{4,10}\b", embedded_strings)
-            if numbers:
-                self.log_action(f"Decoded DTMF tone sequence: `{', '.join(numbers)}`")
-                for n in numbers:
-                    self.password_candidates.add(n)
-            else:
-                self.log_action("Inspected acoustic DTMF tone carriers")
+        # DTMF Dial Tone Sequences
+        dtmf_matches = re.findall(r"DTMF.*?(\d{3,8})", embedded_strings, re.IGNORECASE)
+        generic_numbers = re.findall(r"\d{4,8}", embedded_strings)
+        
+        discovered_dtmf = dtmf_matches or generic_numbers
+        if discovered_dtmf:
+            for dtmf_str in discovered_dtmf:
+                self.log_action(f"Decoded DTMF tone sequence: `{dtmf_str}` from `{filename}`")
+                self.raw_clues.add(dtmf_str)
+        elif b"DTMF" in audio_bytes or "dtmf" in filename.lower() or "voicemail" in filename.lower():
+            self.log_action(f"Inspected acoustic DTMF tone carriers in `{filename}`")
 
     # =========================================================================
-    # 4. FORENSICS & PASSWORD HARVESTING MODULE
+    # 4. FORENSICS & CLUE HARVESTING
     # =========================================================================
-    def harvest_password_candidates(self, filename: str, content: str):
+    def harvest_clues_from_text(self, filename: str, content: str):
         """Extracts password clues from comments, variables, and text files."""
+        # Add keywords into context words
+        words = re.findall(r"[a-zA-Z]{3,15}", content)
+        for w in words[:30]:
+            w_lower = w.lower()
+            if len(w_lower) >= 3 and w_lower not in ["the", "and", "for", "with", "this", "that"]:
+                self.context_words.add(w_lower)
+
         patterns = [
-            re.compile(r"(?:password|passwd|pin|key|secret|pass|clue)\s*[:=]\s*(\S+)", re.IGNORECASE),
+            re.compile(r"(?:password|passwd|pin|key|secret|pass|clue|code|token)\s*[:=]\s*(\S+)", re.IGNORECASE),
             re.compile(r"flag\s*is\s*protected\s*by\s*(\S+)", re.IGNORECASE)
         ]
         for pat in patterns:
@@ -300,5 +391,5 @@ class ProductionCTFSolver:
             for m in matches:
                 clean_val = m.strip("'\":;,.")
                 if clean_val and len(clean_val) <= 32:
-                    self.password_candidates.add(clean_val)
-                    self.log_action(f"Harvested password candidate: `{clean_val}` from `{filename}`")
+                    self.raw_clues.add(clean_val)
+                    self.log_action(f"Harvested clue / passphrase keyword: `{clean_val}` from `{filename}`")
