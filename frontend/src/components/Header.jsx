@@ -1,7 +1,16 @@
 import React from 'react';
-import { Shield, Cpu, Activity, Download, Trash2, Terminal } from 'lucide-react';
+import { Shield, Cpu, Activity, Download, Trash2, Terminal, Network } from 'lucide-react';
 
-export default function Header({ status, device, totalTokens, onClearChat, onExportChat, conversationLength }) {
+export default function Header({
+  status,
+  device,
+  totalTokens,
+  onClearChat,
+  onExportChat,
+  conversationLength,
+  selectedModel,
+  onSelectModel
+}) {
   return (
     <header className="h-16 border-b border-cyber-border bg-cyber-card/80 backdrop-blur-md px-6 flex items-center justify-between z-10">
       <div className="flex items-center gap-3">
@@ -15,16 +24,32 @@ export default function Header({ status, device, totalTokens, onClearChat, onExp
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-bold tracking-wider font-mono text-white flex items-center gap-1.5">
               CYBER<span className="text-cyber-cyan">QWEN</span>
-              <span className="text-xs px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-sans font-semibold">8B-v3</span>
+              <span className="text-xs px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-sans font-semibold">MULTI-AGENT</span>
             </h1>
           </div>
-          <p className="text-xs text-slate-400 font-mono">Offensive & Defensive AI Operations Suite</p>
+          <p className="text-xs text-slate-400 font-mono">CyberQwen 8B + Nemotron + Gemini Collaborative Reasoning</p>
         </div>
       </div>
 
       <div className="flex items-center gap-4">
-        {/* System Telemetry Pills */}
-        <div className="hidden md:flex items-center gap-3">
+        {/* Model Pipeline Selector */}
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyber-dark/80 border border-cyber-border text-xs font-mono">
+          <Network className="w-3.5 h-3.5 text-cyber-cyan" />
+          <span className="text-slate-400 hidden sm:inline">PIPELINE:</span>
+          <select
+            value={selectedModel}
+            onChange={(e) => onSelectModel(e.target.value)}
+            className="bg-transparent text-cyber-neon font-semibold outline-none cursor-pointer"
+          >
+            <option value="hybrid" className="bg-cyber-dark text-slate-200">Hybrid (CyberQwen + Nemotron + Gemini)</option>
+            <option value="local" className="bg-cyber-dark text-slate-200">CyberQwen Local Only</option>
+            <option value="nemotron" className="bg-cyber-dark text-slate-200">Nemotron Reasoning Agent</option>
+            <option value="gemini" className="bg-cyber-dark text-slate-200">Gemini Verification Agent</option>
+          </select>
+        </div>
+
+        {/* Telemetry Pills */}
+        <div className="hidden lg:flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyber-dark/60 border border-cyber-border text-xs font-mono text-slate-300">
             <Activity className="w-3.5 h-3.5 text-cyber-neon" />
             <span>STATUS: <span className="text-cyber-neon font-bold">{status.toUpperCase()}</span></span>
@@ -34,13 +59,6 @@ export default function Header({ status, device, totalTokens, onClearChat, onExp
             <Cpu className="w-3.5 h-3.5 text-cyber-cyan" />
             <span>DEVICE: <span className="text-cyber-cyan font-bold">{device.toUpperCase()}</span></span>
           </div>
-
-          {totalTokens > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyber-dark/60 border border-cyber-border text-xs font-mono text-slate-300">
-              <Terminal className="w-3.5 h-3.5 text-purple-400" />
-              <span>TOKENS: <span className="text-purple-400 font-bold">{totalTokens}</span></span>
-            </div>
-          )}
         </div>
 
         {/* Action Buttons */}

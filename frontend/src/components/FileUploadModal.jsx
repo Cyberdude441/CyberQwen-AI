@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { X, UploadCloud, FolderArchive, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { X, UploadCloud, FolderArchive, CheckCircle2, Loader2, Network } from 'lucide-react';
 
-export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading }) {
+export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading, selectedModel }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [action, setAction] = useState('ctf_assistant');
+  const [mode, setMode] = useState(selectedModel || 'hybrid');
   const [customPrompt, setCustomPrompt] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
@@ -27,7 +28,7 @@ export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading }
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!selectedFile) return;
-    onUpload(selectedFile, action, customPrompt);
+    onUpload(selectedFile, action, mode, customPrompt);
   };
 
   const isZip = selectedFile?.name?.toLowerCase().endsWith('.zip');
@@ -68,7 +69,7 @@ export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading }
                 <CheckCircle2 className="w-8 h-8 text-cyber-neon" />
                 <span className="font-mono text-sm font-semibold text-white">{selectedFile.name}</span>
                 <span className="text-xs text-slate-400 font-mono">
-                  {(selectedFile.size / 1024).toFixed(1)} KB {isZip ? '• ZIP Archive (Auto-Extraction Enabled)' : '• Target File'}
+                  {(selectedFile.size / 1024).toFixed(1)} KB {isZip ? '• ZIP Archive (Auto-Extraction)' : '• Target File'}
                 </span>
               </div>
             ) : (
@@ -80,17 +81,35 @@ export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading }
             )}
           </div>
 
+          {/* Model Pipeline Selection */}
+          <div>
+            <label className="block text-xs font-mono font-semibold text-slate-300 mb-1.5 uppercase flex items-center gap-1.5">
+              <Network className="w-3.5 h-3.5 text-cyber-cyan" />
+              Reasoning & Verification Pipeline
+            </label>
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-cyber-dark/80 border border-slate-700 text-sm text-cyber-neon font-mono focus:outline-none focus:border-cyber-cyan"
+            >
+              <option value="hybrid">⚡ Hybrid Mode (CyberQwen + Nemotron + Gemini Consensus)</option>
+              <option value="local">🖥️ CyberQwen Local Model Only</option>
+              <option value="nemotron">🧠 NVIDIA Nemotron Reasoning Agent</option>
+              <option value="gemini">🛡️ Google Gemini Verification Agent</option>
+            </select>
+          </div>
+
           {/* Analysis Goal */}
           <div>
             <label className="block text-xs font-mono font-semibold text-slate-300 mb-1.5 uppercase">
-              Security Operational Objective
+              Operational Objective
             </label>
             <select
               value={action}
               onChange={(e) => setAction(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-cyber-dark/80 border border-slate-700 text-sm text-slate-200 font-mono focus:outline-none focus:border-cyber-cyan"
             >
-              <option value="ctf_assistant">🏆 CTF Challenge Solver (Extract & Analyze Evidence)</option>
+              <option value="ctf_assistant">🏆 CTF Challenge Solver (Extract & Recover Exact Flag)</option>
               <option value="vulnerability_analysis">🛡️ Comprehensive Vulnerability Assessment</option>
               <option value="code_review">🔍 Secure Code Review (OWASP Top 10 / CWE)</option>
               <option value="log_analysis">📊 Security Log & IoC Incident Analysis</option>
@@ -98,14 +117,14 @@ export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading }
             </select>
           </div>
 
-          {/* Optional Prompt */}
+          {/* Optional Directives */}
           <div>
             <label className="block text-xs font-mono font-semibold text-slate-300 mb-1.5 uppercase">
-              Target Directives (Optional)
+              Custom Operator Directives (Optional)
             </label>
             <input
               type="text"
-              placeholder="e.g. Find flag in encrypted pyc or write pwntools solver script"
+              placeholder="e.g. Focus on memory corruption, crack XOR key, or inspect stego"
               value={customPrompt}
               onChange={(e) => setCustomPrompt(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-cyber-dark/80 border border-slate-700 text-sm text-slate-200 font-mono focus:outline-none focus:border-cyber-cyan"
@@ -126,7 +145,7 @@ export default function FileUploadModal({ isOpen, onClose, onUpload, isLoading }
               disabled={!selectedFile || isLoading}
               className="flex items-center gap-2 px-5 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-cyber-neon text-cyber-dark font-bold font-mono text-sm hover:opacity-90 transition-all disabled:opacity-50 shadow-neon"
             >
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Inspect & Analyze Evidence'}
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Run Collaborative Analysis'}
             </button>
           </div>
         </form>

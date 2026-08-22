@@ -1,6 +1,6 @@
 """
 CyberQwen-AI: FastAPI Live REST API Server
-Provides endpoints for conversational chat, multi-format file/archive analysis, and health telemetry.
+Provides endpoints for conversational chat, multi-model collaborative analysis, and health telemetry.
 """
 
 import os
@@ -13,11 +13,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from backend.model_service import CyberQwenService
 from backend.archive_processor import process_file_or_zip
+from backend.reasoning_orchestrator import MultiModelReasoningOrchestrator
 
 app = FastAPI(
-    title="CyberQwen-AI Backend API",
-    description="Live inference and cybersecurity file/archive analysis API for CyberQwen-8B",
-    version="1.0.0"
+    title="CyberQwen-AI Multi-Model Reasoning Backend",
+    description="Collaborative intelligence platform powering CyberQwen-8B, NVIDIA Nemotron, and Google Gemini",
+    version="2.0.0"
 )
 
 app.add_middleware(
@@ -29,6 +30,7 @@ app.add_middleware(
 )
 
 cyber_service = CyberQwenService()
+orchestrator = MultiModelReasoningOrchestrator(cyber_service)
 
 class ChatMessage(BaseModel):
     role: str
@@ -40,17 +42,24 @@ class ChatRequest(BaseModel):
     system_prompt: Optional[str] = None
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = 1024
+    mode: Optional[str] = "hybrid"
 
 class AnalysisRequest(BaseModel):
     action: str
     content: str
     context: Optional[str] = ""
+    mode: Optional[str] = "hybrid"
 
 @app.get("/")
 def root():
     return {
-        "service": "CyberQwen-AI Backend API",
+        "service": "CyberQwen-AI Multi-Model Backend API",
         "status": "online",
+        "models": {
+            "primary": "CyberQwen-8B",
+            "reasoning": "NVIDIA Nemotron-70B",
+            "verification": "Google Gemini 1.5/2.0 Flash"
+        },
         "endpoints": ["/health", "/chat", "/upload", "/analyze"]
     }
 
@@ -61,7 +70,8 @@ def health():
         "model": "CyberQwen",
         "weights_path": str(cyber_service.model_path),
         "device": cyber_service.device,
-        "is_loaded": cyber_service.is_loaded
+        "is_loaded": cyber_service.is_loaded,
+        "multi_model_ready": True
     }
 
 @app.post("/chat")
@@ -86,16 +96,17 @@ def chat(payload: ChatRequest):
 async def upload_file(
     file: UploadFile = File(...),
     action: Optional[str] = Form(default="ctf_assistant"),
+    mode: Optional[str] = Form(default="hybrid"),
     custom_prompt: Optional[str] = Form(default=None)
 ):
     try:
         content_bytes = await file.read()
         filename = file.filename or "uploaded_file.bin"
         
+        # 1. Process ZIP archive or single file into structured forensic context
         extracted = process_file_or_zip(filename, content_bytes)
-        file_list_str = "\n".join([f"- {name}" for name in extracted["file_names"]])
         
-        # Terminal Backend Logging
+        # 2. Terminal Backend Logging
         print("\n" + "=" * 60)
         print(f"UPLOAD:\n{filename}")
         print("EXTRACTED:")
@@ -105,106 +116,34 @@ async def upload_file(
         print("MODEL INPUT:\nverified")
         print("=" * 60 + "\n")
 
-        # CTF Solver Prompt with Chain-of-Evidence Reasoning
-        if action == "ctf_assistant":
-            system_prompt = (
-                "You are CyberQwen CTF Solver.\n"
-                "Your objective is to recover the exact flag from authorized challenge evidence.\n"
-                "Analyze all provided files.\n"
-                "Do not stop at recommendations.\n\n"
-                "Perform:\n"
-                "1. Evidence extraction\n"
-                "2. Pattern identification\n"
-                "3. Decoding/decryption reasoning\n"
-                "4. Verification\n"
-                "5. Flag extraction\n\n"
-                "Only output a flag when confirmed.\n\n"
-                "Final response format:\n\n"
-                "Challenge Type:\n"
-                "Evidence:\n"
-                "Analysis:\n"
-                "Solution:\n"
-                "FLAG FOUND:\n"
-                "FLAG{...}\n\n"
-                "If flag cannot be confirmed, output:\n"
-                "FLAG NOT RECOVERED\n<explanation>"
-            )
-            
-            user_prompt = (
-                f"Analyze this authorized CTF challenge and recover the exact flag based on the evidence below:\n\n"
-                f"{extracted['context']}"
-            )
-        elif action == "vulnerability_analysis":
-            system_prompt = "You are CyberQwen Security Auditor. Perform rigorous vulnerability discovery and triage."
-            user_prompt = (
-                f"Vulnerability Assessment on target files:\n\n"
-                f"{extracted['context']}\n\n"
-                f"Provide:\n"
-                f"1. **Vulnerability Summary**\n"
-                f"2. **Risk Level** (Critical / High / Medium / Low / Safe)\n"
-                f"3. **Technical Explanation & Root Cause**\n"
-                f"4. **Actionable Remediation & Patched Code**"
-            )
-        elif action == "code_review":
-            system_prompt = "You are CyberQwen Secure Code Auditor. Review code against OWASP Top 10 and CWE standards."
-            user_prompt = (
-                f"Secure Code Review on target files:\n\n"
-                f"{extracted['context']}\n\n"
-                f"Highlight insecure patterns, memory flaws, injection risks, and provide secure refactored code."
-            )
-        elif action == "log_analysis":
-            system_prompt = "You are CyberQwen Incident Responder. Analyze security logs for intrusion signals and IoCs."
-            user_prompt = (
-                f"Security Log Analysis on target stream:\n\n"
-                f"{extracted['context']}\n\n"
-                f"Summarize threat timeline, suspicious IP/user entities, and defense response."
-            )
-        else:
-            system_prompt = "You are CyberQwen AI, an elite cybersecurity operational assistant."
-            user_prompt = f"Analyze the following evidence:\n\n{extracted['context']}"
-
-        if custom_prompt:
-            user_prompt += f"\n\nOperator Directive: {custom_prompt}"
-
-        result = cyber_service.generate_response(
-            message=user_prompt,
-            system_prompt=system_prompt,
-            max_new_tokens=1500,
-            temperature=0.2
+        # 3. Multi-Model Reasoning Pipeline Execution
+        orchestrator_result = orchestrator.execute_reasoning_pipeline(
+            filename=filename,
+            extracted_data=extracted,
+            mode=mode or "hybrid",
+            action=action
         )
-        
+
         return {
             "filename": filename,
             "action": action,
+            "mode": mode,
             "is_archive": extracted["is_archive"],
             "file_names": extracted["file_names"],
             "file_count": extracted["file_count"],
             "files_metadata": extracted["files_metadata"],
             "discovered_flags": extracted["discovered_flags"],
             "estimated_tokens": extracted["estimated_tokens"],
-            "response": result["response"],
-            "tokens": result["tokens"],
-            "latency_ms": result["latency_ms"]
+            "response": orchestrator_result["response"],
+            "nemotron_status": orchestrator_result["nemotron_status"],
+            "gemini_status": orchestrator_result["gemini_status"],
+            "consensus": orchestrator_result["consensus"],
+            "tokens": orchestrator_result["tokens"],
+            "latency_ms": orchestrator_result["latency_ms"]
         }
     except Exception as e:
         print(f"[!] Upload processing error: {e}")
         raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}")
-
-@app.post("/analyze")
-def analyze_snippet(payload: AnalysisRequest):
-    action_prompts = {
-        "vulnerability_analysis": f"Perform a vulnerability analysis on the following technical artifact:\n```\n{payload.content[:4000]}\n```",
-        "code_review": f"Review this source code for security vulnerabilities and suggest patches:\n```\n{payload.content[:4000]}\n```",
-        "log_analysis": f"Inspect these security logs for intrusion signals or IoCs:\n```\n{payload.content[:4000]}\n```",
-        "cve_explainer": f"Analyze and explain this CVE / vulnerability advisory:\n```\n{payload.content[:4000]}\n```",
-        "ctf_assistant": f"Provide CTF strategy and exploitation solution for this problem:\n```\n{payload.content[:4000]}\n```"
-    }
-    prompt = action_prompts.get(payload.action, f"Analyze this cybersecurity artifact:\n{payload.content}")
-    if payload.context:
-        prompt += f"\n\nAdditional Context: {payload.context}"
-        
-    result = cyber_service.generate_response(message=prompt, max_new_tokens=1500)
-    return result
 
 if __name__ == "__main__":
     import uvicorn

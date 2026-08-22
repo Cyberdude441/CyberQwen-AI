@@ -8,7 +8,7 @@ CyberQwen-AI is an end-to-end specialized artificial intelligence platform for o
 
 ```text
 CyberQwen-AI/
-├── .env                          # API keys (NVIDIA, Hugging Face, etc.)
+├── .env                          # API keys (NVIDIA_API_KEY, GEMINI_API_KEY, etc.)
 ├── .venv/                        # Isolated Python 3.11 Virtual Environment
 ├── Modelfile                     # Ollama configuration and system instructions
 ├── README.md                     # Complete pipeline documentation
@@ -16,9 +16,13 @@ CyberQwen-AI/
 ├── start_backend.bat             # 1-click FastAPI backend launcher (Port 8000)
 ├── start_frontend.bat            # 1-click React + Vite UI launcher (Port 5173)
 │
-├── backend/                      # FastAPI Live Inference & Analysis REST API
+├── backend/                      # Multi-Model Collaborative Intelligence Backend
 │   ├── main.py                   # REST endpoints (/health, /chat, /upload, /analyze)
 │   ├── model_service.py          # In-memory CyberQwen-Merged runner & document parser
+│   ├── archive_processor.py      # Multi-file ZIP extractor & deep artifact scanner
+│   ├── nemotron_client.py        # NVIDIA Nemotron-70B deep reasoning agent
+│   ├── gemini_client.py          # Google Gemini adversarial verification agent
+│   ├── reasoning_orchestrator.py # Multi-model consensus synthesis engine
 │   └── test_api_suite.py         # Automated endpoint test suite
 │
 ├── frontend/                     # Futuristic CyberQwen Web Interface (React + Vite)
@@ -28,19 +32,47 @@ CyberQwen-AI/
 │
 ├── dataset/
 │   ├── final/                    # Production 4-tier progressive curriculum (v3)
-│   │   ├── train_v3.jsonl        # 2,282 clean unique samples (0 duplicates)
-│   │   └── validation_v3.jsonl   # 252 clean unique samples (0 leakage)
-│   ├── raw/                      # CISA KEV, YARA rules, OWASP security corpus
-│   └── processed/                # Normalized cybersecurity datasets
+│   ├── ctf/                      # CTF Chain-of-Evidence dataset & 100-sample benchmark
+│   └── raw/                      # CISA KEV, YARA rules, OWASP security corpus
 │
 ├── models/
 │   ├── CyberQwen-Merged/         # Fully merged standalone model weights (model.safetensors)
-│   ├── test-CyberQwen-LoRA/      # Validated LoRA adapter weights & checkpoints
-│   └── CyberQwen-LoRA/           # Active training output directory
+│   ├── CyberQwen-CTF-LoRA/       # Fine-tuned CTF LoRA adapter
+│   └── test-CyberQwen-LoRA/      # Validated LoRA adapter weights & checkpoints
 │
 ├── logs/                         # Benchmark evaluations and telemetry metrics
 └── scripts/                      # Complete QLoRA fine-tuning & evaluation tooling
 ```
+
+---
+
+## 🤖 Multi-Agent CyberQwen Architecture
+
+CyberQwen operates as a collaborative multi-model consensus system:
+
+```mermaid
+flowchart TD
+    User(["Operator Uploads Target / Evidence (.zip)"]) --> Pre["Archive Processor & Forensics Scanner"]
+    Pre --> Manifest["Structured Evidence Manifest (Hashes, Strings, Hex, Base64)"]
+    
+    Manifest --> CQ["1. CyberQwen 8B Local (Primary Domain Model)"]
+    Manifest --> Nemo["2. NVIDIA Nemotron-70B (Deep Reasoning Agent)"]
+    
+    Nemo --> Hypo["Hypotheses, Solver Planning & Candidate Flags"]
+    Hypo --> Gem["3. Google Gemini (Adversarial Verification Agent)"]
+    Manifest --> Gem
+    
+    CQ --> Orch["Multi-Model Reasoning Orchestrator"]
+    Nemo --> Orch
+    Gem --> Orch
+    
+    Orch --> Final["Verified Consensus Report & Flag Extraction"]
+```
+
+### Tri-Model Responsibilities:
+1. **CyberQwen 8B Local (Primary Model)**: Direct domain-specific causal language model fine-tuned on cybersecurity corpora for rapid token generation, vulnerability triage, and exploit mechanics.
+2. **NVIDIA Nemotron-70B (Deep Reasoning Agent)**: Formulates multi-step solver hypotheses, analyzes cryptographic schedules, and plans reverse engineering approaches.
+3. **Google Gemini (Adversarial Verification Agent)**: Performs hallucination checks against raw evidence bytes, verifying that candidate flags are mathematically and forensically confirmed before final output.
 
 ---
 

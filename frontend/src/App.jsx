@@ -3,7 +3,7 @@ import Header from './components/Header';
 import ChatMessage from './components/ChatMessage';
 import QuickActions from './components/QuickActions';
 import FileUploadModal from './components/FileUploadModal';
-import { Send, Upload, FolderArchive, Loader2, Check } from 'lucide-react';
+import { Send, Upload, FolderArchive, Loader2, Check, Network, ShieldCheck } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -16,13 +16,14 @@ export default function App() {
     return [
       {
         role: 'assistant',
-        content: `### Welcome to CyberQwen AI (8B-v3)\n\nI am your specialized cybersecurity AI pair-programmer and operational assistant.\n\n**Evidence Analysis Pipeline Ready:**\n- 📦 **ZIP / Multi-File Extraction**: Safely unpacks archives, extracts source files, and indexes binary headers.\n- 🏆 **CTF Challenge Solver**: Identifies flaws, cryptographic weaknesses, and outputs flag extraction approaches.\n- 🛡️ **Vulnerability Triage**: Analyzes root causes and writes secure patches.\n\n*Upload a .zip challenge or type your query below.*`
+        content: `### Welcome to CyberQwen Multi-Agent System (8B-v3)\n\nI am connected to a collaborative intelligence pipeline:\n- 🖥️ **CyberQwen 8B Local**: Primary cybersecurity domain model.\n- 🧠 **NVIDIA Nemotron**: Deep hypothesis formulation & solver planning.\n- 🛡️ **Google Gemini**: Adversarial verification & hallucination guard.\n\n*Upload a .zip challenge or select a pipeline above to begin.*`
       }
     ];
   });
 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('hybrid');
   const [analysisProgress, setAnalysisProgress] = useState(null);
   const [systemStatus, setSystemStatus] = useState('checking');
   const [device, setDevice] = useState('detecting');
@@ -74,6 +75,7 @@ export default function App() {
         body: JSON.stringify({
           message: messageContent,
           history: historyPayload,
+          mode: selectedModel,
           temperature: 0.7,
           max_tokens: 1200
         })
@@ -115,26 +117,26 @@ export default function App() {
     setInput(promptMap[actionId] || "");
   };
 
-  const handleFileUpload = async (file, action, customPrompt) => {
+  const handleFileUpload = async (file, action, mode, customPrompt) => {
     setIsUploadOpen(false);
     setIsLoading(true);
 
-    // Initial Evidence Progress UI Panel
     setAnalysisProgress({
       fileName: file.name,
       fileSize: (file.size / 1024).toFixed(1) + ' KB',
+      mode: mode || selectedModel,
       steps: [
-        { label: 'File received', status: 'done' },
-        { label: 'Archive extracted', status: 'running' },
-        { label: 'Files indexed', status: 'pending' },
-        { label: 'Context generated', status: 'pending' },
-        { label: 'CyberQwen analyzing', status: 'pending' }
+        { label: 'File received & unpacked', status: 'done' },
+        { label: 'Artifacts scanned & indexed', status: 'done' },
+        { label: 'Nemotron reasoning dispatched', status: 'running' },
+        { label: 'Gemini verification checking', status: 'pending' },
+        { label: 'CyberQwen consensus synthesis', status: 'pending' }
       ]
     });
 
     const userMessage = {
       role: 'user',
-      content: `📁 **Uploaded Evidence Target**: \`${file.name}\` (${(file.size / 1024).toFixed(1)} KB)\n**Action**: \`${action}\`${customPrompt ? `\n**Directive**: ${customPrompt}` : ''}`
+      content: `📁 **Uploaded Target**: \`${file.name}\` (${(file.size / 1024).toFixed(1)} KB)\n**Action**: \`${action}\` | **Pipeline**: \`${(mode || selectedModel).toUpperCase()}\`${customPrompt ? `\n**Directive**: ${customPrompt}` : ''}`
     };
     setMessages((prev) => [...prev, userMessage]);
 
@@ -142,21 +144,21 @@ export default function App() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('action', action);
+      formData.append('mode', mode || selectedModel);
       if (customPrompt) formData.append('custom_prompt', customPrompt);
 
-      // Transition step states to active analysis
       setTimeout(() => {
         setAnalysisProgress((prev) => prev ? ({
           ...prev,
           steps: [
-            { label: 'File received', status: 'done' },
-            { label: 'Archive extracted', status: 'done' },
-            { label: 'Files indexed', status: 'done' },
-            { label: 'Context generated', status: 'done' },
-            { label: 'CyberQwen analyzing', status: 'running' }
+            { label: 'File received & unpacked', status: 'done' },
+            { label: 'Artifacts scanned & indexed', status: 'done' },
+            { label: 'Nemotron reasoning dispatched', status: 'done' },
+            { label: 'Gemini verification checking', status: 'done' },
+            { label: 'CyberQwen consensus synthesis', status: 'running' }
           ]
         }) : null);
-      }, 600);
+      }, 800);
 
       const res = await fetch(`${API_BASE}/upload`, {
         method: 'POST',
@@ -167,16 +169,16 @@ export default function App() {
 
       const data = await res.json();
 
-      let extractedInfoBlock = '';
-      if (data.file_names && data.file_names.length > 0) {
-        extractedInfoBlock = `#### 📦 Extracted Evidence Files (${data.file_count}):\n` +
-          data.file_names.map(f => `- \`${f}\``).join('\n') +
-          `\n\n---\n\n`;
+      let consensusBadge = '';
+      if (data.consensus) {
+        consensusBadge = data.consensus === 'verified'
+          ? `> [!NOTE]\n> **Multi-Model Consensus: VERIFIED** (CyberQwen + Nemotron + Gemini aligned)\n\n`
+          : `> [!WARNING]\n> **Multi-Model Consensus: UNVERIFIED** (Insufficient evidence for complete flag recovery)\n\n`;
       }
 
       const botMessage = {
         role: 'assistant',
-        content: extractedInfoBlock + data.response,
+        content: consensusBadge + data.response,
         latency_ms: data.latency_ms,
         tokens: data.tokens
       };
@@ -230,6 +232,8 @@ export default function App() {
         onClearChat={handleClearChat}
         onExportChat={handleExportChat}
         conversationLength={messages.length}
+        selectedModel={selectedModel}
+        onSelectModel={setSelectedModel}
       />
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
@@ -237,15 +241,14 @@ export default function App() {
           <ChatMessage key={idx} message={msg} />
         ))}
 
-        {/* Evidence Analysis Progress Panel */}
+        {/* Multi-Model Progress Card */}
         {analysisProgress && (
           <div className="py-5 px-6 bg-cyan-950/30 border-y border-cyber-cyan/40 backdrop-blur-md">
             <div className="max-w-4xl mx-auto space-y-3">
               <div className="flex items-center gap-2 text-cyber-cyan font-mono text-xs font-bold uppercase tracking-wider">
-                <FolderArchive className="w-4 h-4 animate-pulse text-cyber-neon" />
-                <span>Analyzing uploaded evidence... <span className="text-white">({analysisProgress.fileName})</span></span>
+                <Network className="w-4 h-4 animate-pulse text-cyber-neon" />
+                <span>Multi-Model Reasoning Pipeline: <span className="text-white">{analysisProgress.fileName}</span> ({analysisProgress.mode.toUpperCase()})</span>
               </div>
-              <div className="text-xs font-mono text-slate-400 font-semibold mb-1">Progress:</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2">
                 {analysisProgress.steps.map((st, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs font-mono px-3 py-2 rounded-lg bg-cyber-dark/80 border border-cyber-border">
@@ -269,7 +272,7 @@ export default function App() {
                 <Loader2 className="w-4 h-4 animate-spin text-cyber-cyan" />
               </div>
               <span className="text-xs font-mono text-cyber-cyan animate-pulse">
-                CyberQwen analyzing security mechanics & generating response...
+                CyberQwen analyzing security mechanics & synthesizing response...
               </span>
             </div>
           </div>
@@ -330,6 +333,7 @@ export default function App() {
         onClose={() => setIsUploadOpen(false)}
         onUpload={handleFileUpload}
         isLoading={isLoading}
+        selectedModel={selectedModel}
       />
     </div>
   );

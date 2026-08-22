@@ -98,7 +98,7 @@ def scan_for_artifacts(text: str) -> Dict[str, List[str]]:
     for kw in secret_keywords:
         pattern = re.compile(rf"{kw}\s*[:=]\s*(\S+)", re.IGNORECASE)
         for m in pattern.findall(text):
-            clean_val = m.strip("'"")
+            clean_val = m.strip("'\":;,")
             findings["secrets"].append(f"{kw}: `{clean_val}`")
 
     findings["flags"] = list(set(findings["flags"]))
