@@ -6,10 +6,12 @@ into structured analysis context without executing any target files.
 
 import os
 import io
+import re
 import zipfile
 import hashlib
+import base64
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 TEXT_EXTENSIONS = {
     ".py", ".c", ".cpp", ".cc", ".h", ".hpp", ".js", ".ts", ".jsx", ".tsx",
@@ -18,6 +20,10 @@ TEXT_EXTENSIONS = {
     ".yaml", ".yml", ".xml", ".html", ".htm", ".css", ".sql", ".yar", ".yara",
     ".conf", ".cfg", ".ini", ".env", ".toml", ".csv", ".tsv", ".hex"
 }
+
+FLAG_REGEX = re.compile(r"(FLAG\{[^}]+\}|CTF\{[^}]+\}|picoCTF\{[^}]+\}|HTB\{[^}]+\}|flag\{[^}]+\}|cyber\{[^}]+\})", re.IGNORECASE)
+BASE64_REGEX = re.compile(r"([A-Za-z0-9+/]{12,}={0,2})")
+HEX_ARRAY_REGEX = re.compile(r"(0x[0-9a-fA-F]{2},\s*)+0x[0-9a-fA-F]{2}")
 
 def calculate_sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -43,6 +49,60 @@ def extract_printable_strings(data: bytes, min_len: int = 4, max_chars: int = 60
 def get_magic_header(data: bytes) -> str:
     header_bytes = data[:16]
     return " ".join(f"{b:02X}" for b in header_bytes)
+
+def scan_for_artifacts(text: str) -> Dict[str, List[str]]:
+    findings = {
+        "flags": [],
+        "base64_decoded": [],
+        "hex_decoded": [],
+        "urls": [],
+        "secrets": []
+    }
+
+    # 1. Direct Flag Pattern
+    flags_found = FLAG_REGEX.findall(text)
+    if flags_found:
+        findings["flags"] = list(set(flags_found))
+
+    # 2. Base64 Detection & Decoding
+    b64_matches = BASE64_REGEX.findall(text)
+    for b64_str in b64_matches[:10]:
+        try:
+            decoded = base64.b64decode(b64_str).decode("utf-8", errors="ignore").strip()
+            if len(decoded) >= 4 and any(c.isalnum() for c in decoded):
+                if FLAG_REGEX.search(decoded):
+                    findings["flags"].extend(FLAG_REGEX.findall(decoded))
+                findings["base64_decoded"].append(f"`{b64_str[:30]}...` -> `{decoded[:100]}`")
+        except Exception:
+            pass
+
+    # 3. Hex Byte Arrays
+    for match in HEX_ARRAY_REGEX.finditer(text):
+        raw_hex = match.group(0)
+        try:
+            bytes_list = [int(h.strip(), 16) for h in raw_hex.split(",")]
+            decoded_ascii = "".join([chr(b) if 32 <= b <= 126 else "." for b in bytes_list])
+            if FLAG_REGEX.search(decoded_ascii):
+                findings["flags"].extend(FLAG_REGEX.findall(decoded_ascii))
+            findings["hex_decoded"].append(f"{raw_hex[:40]}... -> `{decoded_ascii}`")
+        except Exception:
+            pass
+
+    # 4. URLs
+    urls = re.findall(r"https?://[^\s<>]+", text)
+    if urls:
+        findings["urls"] = list(set(urls))[:5]
+
+    # 5. Secrets / Keywords
+    secret_keywords = ["password", "passwd", "secret", "private_key", "flag", "token", "auth_key", "admin_pass"]
+    for kw in secret_keywords:
+        pattern = re.compile(rf"{kw}\s*[:=]\s*(\S+)", re.IGNORECASE)
+        for m in pattern.findall(text):
+            clean_val = m.strip("'"")
+            findings["secrets"].append(f"{kw}: `{clean_val}`")
+
+    findings["flags"] = list(set(findings["flags"]))
+    return findings
 
 def process_file_or_zip(filename: str, content_bytes: bytes) -> Dict[str, Any]:
     ext = Path(filename).suffix.lower()
@@ -86,12 +146,15 @@ def process_file_or_zip(filename: str, content_bytes: bytes) -> Dict[str, Any]:
                         text_content = f"[Binary File - Magic: {magic}]\nStrings Preview: {strings_preview}"
                         file_type = f"Binary ({sub_ext or 'unknown'})"
 
+                    artifacts = scan_for_artifacts(text_content)
+
                     extracted_files.append({
                         "name": clean_name,
                         "size": file_size,
                         "hash": file_hash,
                         "type": file_type,
-                        "content": text_content
+                        "content": text_content,
+                        "artifacts": artifacts
                     })
 
         except Exception as e:
@@ -100,7 +163,8 @@ def process_file_or_zip(filename: str, content_bytes: bytes) -> Dict[str, Any]:
                 "size": len(content_bytes),
                 "hash": calculate_sha256(content_bytes),
                 "type": "Corrupted ZIP / Raw Binary",
-                "content": f"[Error reading ZIP: {e}]"
+                "content": f"[Error reading ZIP: {e}]",
+                "artifacts": {"flags": [], "base64_decoded": [], "hex_decoded": [], "urls": [], "secrets": []}
             })
     else:
         file_hash = calculate_sha256(content_bytes)
@@ -127,14 +191,19 @@ def process_file_or_zip(filename: str, content_bytes: bytes) -> Dict[str, Any]:
             text_content = f"[Binary File - Magic: {magic}]\nStrings Preview: {strings_preview}"
             file_type = f"Binary ({ext or 'raw'})"
 
+        artifacts = scan_for_artifacts(text_content)
+
         extracted_files.append({
             "name": filename,
             "size": file_size,
             "hash": file_hash,
             "type": file_type,
-            "content": text_content
+            "content": text_content,
+            "artifacts": artifacts
         })
 
+    all_discovered_flags = []
+    evidence_findings = []
     context_blocks = []
     file_names_list = []
 
@@ -143,6 +212,17 @@ def process_file_or_zip(filename: str, content_bytes: bytes) -> Dict[str, Any]:
         content_snippet = f_info["content"]
         if len(content_snippet) > 3500:
             content_snippet = content_snippet[:3500] + "\n... [Content truncated for analysis context]"
+
+        arts = f_info.get("artifacts", {})
+        if arts.get("flags"):
+            all_discovered_flags.extend(arts["flags"])
+            evidence_findings.append(f"- **Flag Pattern in `{f_info['name']}`**: `{', '.join(arts['flags'])}`")
+        if arts.get("base64_decoded"):
+            evidence_findings.append(f"- **Base64 Decoded in `{f_info['name']}`**:\n  " + "\n  ".join(arts["base64_decoded"][:3]))
+        if arts.get("hex_decoded"):
+            evidence_findings.append(f"- **Hex Array Decoded in `{f_info['name']}`**:\n  " + "\n  ".join(arts["hex_decoded"][:3]))
+        if arts.get("secrets"):
+            evidence_findings.append(f"- **Secrets / Keywords in `{f_info['name']}`**:\n  " + "\n  ".join(arts["secrets"][:3]))
 
         block = (
             f"FILE:\n{f_info['name']}\n\n"
@@ -156,7 +236,14 @@ def process_file_or_zip(filename: str, content_bytes: bytes) -> Dict[str, Any]:
         )
         context_blocks.append(block)
 
-    full_context = "\n\n".join(context_blocks)
+    structured_evidence_summary = (
+        f"EVIDENCE REPORT:\n\n"
+        f"File:\n{filename}\n\n"
+        f"Contains:\n" + "\n".join([f"- {fn}" for fn in file_names_list]) + "\n\n"
+        f"Key Automated Findings:\n" + ("\n".join(evidence_findings) if evidence_findings else "- No trivial plaintext/base64 flag strings detected directly. Manual algorithmic analysis required.")
+    )
+
+    full_context = structured_evidence_summary + "\n\n==================================================\n\n" + "\n\n".join(context_blocks)
     estimated_tokens = max(len(full_context) // 4, 1)
 
     return {
@@ -168,6 +255,8 @@ def process_file_or_zip(filename: str, content_bytes: bytes) -> Dict[str, Any]:
             {"name": f["name"], "size": f["size"], "hash": f["hash"], "type": f["type"]}
             for f in extracted_files
         ],
+        "discovered_flags": list(set(all_discovered_flags)),
+        "evidence_summary": structured_evidence_summary,
         "context": full_context,
         "estimated_tokens": estimated_tokens
     }

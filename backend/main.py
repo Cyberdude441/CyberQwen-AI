@@ -95,6 +95,7 @@ async def upload_file(
         extracted = process_file_or_zip(filename, content_bytes)
         file_list_str = "\n".join([f"- {name}" for name in extracted["file_names"]])
         
+        # Terminal Backend Logging
         print("\n" + "=" * 60)
         print(f"UPLOAD:\n{filename}")
         print("EXTRACTED:")
@@ -104,27 +105,40 @@ async def upload_file(
         print("MODEL INPUT:\nverified")
         print("=" * 60 + "\n")
 
+        # CTF Solver Prompt with Chain-of-Evidence Reasoning
         if action == "ctf_assistant":
-            prompt = (
-                f"You are analyzing an uploaded CTF challenge.\n\n"
-                f"Files found:\n{file_list_str}\n\n"
-                f"Relevant extracted content:\n{extracted['context']}\n\n"
-                f"Perform:\n\n"
-                f"1. Challenge identification\n"
-                f"2. File type analysis\n"
-                f"3. Vulnerability/weakness discovery\n"
-                f"4. Relevant cryptographic or forensic observations\n"
-                f"5. Possible solution approach\n"
-                f"6. Required tools\n"
-                f"7. Flag extraction strategy\n\n"
-                f"Only provide findings based on the uploaded files.\n"
-                f"If no evidence exists, say so."
+            system_prompt = (
+                "You are CyberQwen CTF Solver.\n"
+                "Your objective is to recover the exact flag from authorized challenge evidence.\n"
+                "Analyze all provided files.\n"
+                "Do not stop at recommendations.\n\n"
+                "Perform:\n"
+                "1. Evidence extraction\n"
+                "2. Pattern identification\n"
+                "3. Decoding/decryption reasoning\n"
+                "4. Verification\n"
+                "5. Flag extraction\n\n"
+                "Only output a flag when confirmed.\n\n"
+                "Final response format:\n\n"
+                "Challenge Type:\n"
+                "Evidence:\n"
+                "Analysis:\n"
+                "Solution:\n"
+                "FLAG FOUND:\n"
+                "FLAG{...}\n\n"
+                "If flag cannot be confirmed, output:\n"
+                "FLAG NOT RECOVERED\n<explanation>"
+            )
+            
+            user_prompt = (
+                f"Analyze this authorized CTF challenge and recover the exact flag based on the evidence below:\n\n"
+                f"{extracted['context']}"
             )
         elif action == "vulnerability_analysis":
-            prompt = (
-                f"You are conducting a Vulnerability Assessment on uploaded files.\n\n"
-                f"Files analyzed:\n{file_list_str}\n\n"
-                f"Extracted content:\n{extracted['context']}\n\n"
+            system_prompt = "You are CyberQwen Security Auditor. Perform rigorous vulnerability discovery and triage."
+            user_prompt = (
+                f"Vulnerability Assessment on target files:\n\n"
+                f"{extracted['context']}\n\n"
                 f"Provide:\n"
                 f"1. **Vulnerability Summary**\n"
                 f"2. **Risk Level** (Critical / High / Medium / Low / Safe)\n"
@@ -132,30 +146,32 @@ async def upload_file(
                 f"4. **Actionable Remediation & Patched Code**"
             )
         elif action == "code_review":
-            prompt = (
-                f"You are conducting a Secure Code Review against OWASP Top 10 and CWE standards.\n\n"
-                f"Target files:\n{file_list_str}\n\n"
-                f"Code context:\n{extracted['context']}\n\n"
+            system_prompt = "You are CyberQwen Secure Code Auditor. Review code against OWASP Top 10 and CWE standards."
+            user_prompt = (
+                f"Secure Code Review on target files:\n\n"
+                f"{extracted['context']}\n\n"
                 f"Highlight insecure patterns, memory flaws, injection risks, and provide secure refactored code."
             )
         elif action == "log_analysis":
-            prompt = (
-                f"Analyze the following security/system logs for Indicators of Compromise (IoCs), abnormal traffic, or intrusion signals.\n\n"
-                f"Log files:\n{file_list_str}\n\n"
-                f"Log stream context:\n{extracted['context']}\n\n"
+            system_prompt = "You are CyberQwen Incident Responder. Analyze security logs for intrusion signals and IoCs."
+            user_prompt = (
+                f"Security Log Analysis on target stream:\n\n"
+                f"{extracted['context']}\n\n"
                 f"Summarize threat timeline, suspicious IP/user entities, and defense response."
             )
         else:
-            prompt = (
-                f"Analyze the following cybersecurity artifact:\n\n"
-                f"Files:\n{file_list_str}\n\n"
-                f"Content:\n{extracted['context']}"
-            )
+            system_prompt = "You are CyberQwen AI, an elite cybersecurity operational assistant."
+            user_prompt = f"Analyze the following evidence:\n\n{extracted['context']}"
 
         if custom_prompt:
-            prompt += f"\n\nUser Custom Directive: {custom_prompt}"
+            user_prompt += f"\n\nOperator Directive: {custom_prompt}"
 
-        result = cyber_service.generate_response(message=prompt, max_new_tokens=1500, temperature=0.3)
+        result = cyber_service.generate_response(
+            message=user_prompt,
+            system_prompt=system_prompt,
+            max_new_tokens=1500,
+            temperature=0.2
+        )
         
         return {
             "filename": filename,
@@ -164,6 +180,7 @@ async def upload_file(
             "file_names": extracted["file_names"],
             "file_count": extracted["file_count"],
             "files_metadata": extracted["files_metadata"],
+            "discovered_flags": extracted["discovered_flags"],
             "estimated_tokens": extracted["estimated_tokens"],
             "response": result["response"],
             "tokens": result["tokens"],
