@@ -1,7 +1,7 @@
 """
-CyberQwen-AI: Optimized Production QLoRA Fine-Tuning Pipeline
-Fine-tunes Qwen3-8B on authentic cybersecurity instruction dataset with hardware-aware optimization,
-VRAM auto-tuning, memory footprint estimation, and checkpoint auto-recovery.
+CyberQwen-AI: Master Production QLoRA Fine-Tuning Pipeline
+Fine-tunes Qwen3-8B on authentic cybersecurity instruction dataset (v3) with hardware-aware optimization,
+VRAM auto-tuning, TRL compatibility guards, and robust step-based checkpointing.
 """
 
 import os
@@ -14,6 +14,7 @@ import argparse
 import re
 from pathlib import Path
 from datasets import load_dataset
+import transformers
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -21,15 +22,29 @@ from transformers import (
     TrainerCallback,
     set_seed
 )
+import peft
 from peft import (
     LoraConfig,
     prepare_model_for_kbit_training,
-    TaskType
+    TaskType,
+    get_peft_model
 )
+import trl
 from trl import SFTTrainer, SFTConfig
+import bitsandbytes as bnb
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
+
+# --- COMPATIBILITY PATCH: Protect against TRL _patch_chunked_ce_lm_head on functools.partial ---
+if hasattr(SFTTrainer, "_patch_chunked_ce_lm_head"):
+    _orig_patch = getattr(SFTTrainer, "_patch_chunked_ce_lm_head")
+    def _safe_patch(self, *args, **kwargs):
+        try:
+            return _orig_patch(self, *args, **kwargs)
+        except Exception:
+            pass
+    SFTTrainer._patch_chunked_ce_lm_head = _safe_patch
 
 class TrainingTelemetryMonitor(TrainerCallback):
     """Monitors and displays live training metrics: Epoch, Step, Loss, GPU VRAM, ETA."""
@@ -63,10 +78,12 @@ class TrainingTelemetryMonitor(TrainerCallback):
 
         # GPU VRAM Telemetry
         vram_str = "N/A"
+        gpu_util = "N/A"
         if torch.cuda.is_available():
             alloc_gb = torch.cuda.memory_allocated() / (1024 ** 3)
             res_gb = torch.cuda.memory_reserved() / (1024 ** 3)
             vram_str = f"{alloc_gb:.2f}GB / {res_gb:.2f}GB"
+            gpu_util = f"{round((alloc_gb / res_gb) * 100, 1)}%" if res_gb > 0 else "N/A"
 
         current_epoch = round(state.epoch, 2) if state.epoch is not None else 0.0
         
@@ -82,6 +99,8 @@ class TrainingTelemetryMonitor(TrainerCallback):
             "loss": train_loss if isinstance(train_loss, (float, int)) else None,
             "val_loss": val_loss if isinstance(val_loss, (float, int)) else None,
             "learning_rate": lr,
+            "gpu_vram": vram_str,
+            "gpu_util": gpu_util,
             "elapsed_seconds": round(elapsed_total, 2)
         })
 
@@ -109,15 +128,16 @@ def find_latest_checkpoint(checkpoint_dir: Path) -> Path:
     return max(ckpts, key=extract_step)
 
 def main():
-    parser = argparse.ArgumentParser(description="CyberQwen-AI: Full QLoRA Fine-Tuning Pipeline")
+    default_train = Path("dataset/final/train_v3.jsonl") if Path("dataset/final/train_v3.jsonl").exists() else (Path("dataset/final/train_v2.jsonl") if Path("dataset/final/train_v2.jsonl").exists() else Path("dataset/instruction/train.jsonl"))
+    default_val = Path("dataset/final/validation_v3.jsonl") if Path("dataset/final/validation_v3.jsonl").exists() else (Path("dataset/final/validation_v2.jsonl") if Path("dataset/final/validation_v2.jsonl").exists() else Path("dataset/instruction/validation.jsonl"))
+
+    parser = argparse.ArgumentParser(description="CyberQwen-AI: Master QLoRA Fine-Tuning Pipeline")
     parser.add_argument("--model_id", type=str, default="Qwen/Qwen3-8B",
                         help="Base model ID (default: Qwen/Qwen3-8B)")
-    parser.add_argument("--train_path", type=Path, 
-                        default=Path("dataset/final/train_v2.jsonl") if Path("dataset/final/train_v2.jsonl").exists() else (Path("dataset/final/train.jsonl") if Path("dataset/final/train.jsonl").exists() else Path("dataset/instruction/train.jsonl")),
-                        help="Train dataset path (default: dataset/final/train_v2.jsonl)")
-    parser.add_argument("--val_path", type=Path, 
-                        default=Path("dataset/final/validation_v2.jsonl") if Path("dataset/final/validation_v2.jsonl").exists() else (Path("dataset/final/validation.jsonl") if Path("dataset/final/validation.jsonl").exists() else Path("dataset/instruction/validation.jsonl")),
-                        help="Validation dataset path (default: dataset/final/validation_v2.jsonl)")
+    parser.add_argument("--train_path", type=Path, default=default_train,
+                        help=f"Train dataset path (default: {default_train})")
+    parser.add_argument("--val_path", type=Path, default=default_val,
+                        help=f"Validation dataset path (default: {default_val})")
     parser.add_argument("--output_dir", type=Path, default=Path("models/CyberQwen-LoRA"),
                         help="Output directory for LoRA adapter")
     parser.add_argument("--epochs", type=int, default=3,
@@ -130,6 +150,8 @@ def main():
                         help="Learning rate (default: 2e-4)")
     parser.add_argument("--max_length", type=int, default=256,
                         help="Maximum sequence length (default: 256)")
+    parser.add_argument("--precision", type=str, default=None,
+                        help="Precision override (fp16, bfloat16, fp32)")
     parser.add_argument("--lora_rank", type=int, default=16,
                         help="LoRA rank r (default: 16)")
     parser.add_argument("--lora_alpha", type=int, default=32,
@@ -141,7 +163,7 @@ def main():
     parser.add_argument("--dry_run", action="store_true", default=False,
                         help="Execute pre-flight dry-run forward pass on 10 samples without training/saving")
     parser.add_argument("--config", type=Path, default=None,
-                        help="Path to YAML training profile (e.g. configs/colab_t4.yaml)")
+                        help="Path to YAML training profile (e.g. configs/kaggle_dual_t4.yaml)")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed")
     args = parser.parse_args()
@@ -161,14 +183,29 @@ def main():
 
     set_seed(args.seed)
 
-    # 1. Hardware Detection & Telemetry
+    # 1. Hardware & Environment Preflight
     cuda_available = torch.cuda.is_available()
+    gpu_count = torch.cuda.device_count() if cuda_available else 0
     gpu_name = torch.cuda.get_device_name(0) if cuda_available else "N/A"
     gpu_vram_gb = round(torch.cuda.get_device_properties(0).total_memory / (1024**3), 2) if cuda_available else 0.0
     cuda_cap = torch.cuda.get_device_capability(0) if cuda_available else (0, 0)
-    bf16_supported = cuda_available and torch.cuda.is_bf16_supported()
+    bf16_hardware_support = cuda_available and torch.cuda.is_bf16_supported()
 
-    # 2. Automatic Optimization based on VRAM
+    # 2. Strict Precision Decision for T4 / Turing (Compute Cap < 8.0)
+    if args.precision:
+        target_precision = args.precision.lower()
+    else:
+        if cuda_available:
+            # If Turing (Cap 7.5) or below, strictly use fp16
+            target_precision = "bfloat16" if (cuda_cap[0] >= 8 and bf16_hardware_support) else "fp16"
+        else:
+            target_precision = "fp32"
+
+    use_fp16 = (target_precision == "fp16") and cuda_available
+    use_bf16 = (target_precision == "bfloat16") and cuda_available and bf16_hardware_support
+    compute_dtype = torch.float16 if use_fp16 else (torch.bfloat16 if use_bf16 else torch.float32)
+
+    # 3. Batch Size & Grad Accum
     if args.batch_size is None or args.grad_accum is None:
         if cuda_available:
             if gpu_vram_gb < 12.0:
@@ -181,44 +218,58 @@ def main():
             args.batch_size = args.batch_size or 1
             args.grad_accum = args.grad_accum or 8
 
-    # 3. Memory Estimation
-    est_model_gb = 5.4  # 4-bit NF4 weights for ~8B model
-    est_lora_gb = 0.4   # LoRA r=16 alpha=32 target modules
-    est_optim_gb = 1.5  # Paged AdamW 8/32-bit states
+    # 4. Memory Estimation
+    est_model_gb = 5.4
+    est_lora_gb = 0.4
+    est_optim_gb = 1.5
     est_activations_gb = round((args.batch_size * args.max_length * 4096 * 36 * 2) / (1024**3), 2)
     est_total_vram_gb = round(est_model_gb + est_lora_gb + est_optim_gb + est_activations_gb, 2)
 
     print("\n" + "=" * 80)
-    print("CYBERQWEN-AI: OPTIMIZED QLORA FINE-TUNING PIPELINE")
+    print("CYBERQWEN-AI: MASTER QLORA ENVIRONMENT PREFLIGHT & HARDWARE AUDIT")
     print("=" * 80)
-    print(f"[*] Base Model:            {args.model_id}")
-    print(f"[*] Train Dataset:         {args.train_path}")
-    print(f"[*] Validation Set:        {args.val_path}")
-    print(f"[*] Output Directory:      {args.output_dir}")
-    print(f"[*] Total Epochs:          {args.epochs}")
-    print(f"[*] Batch Size:            {args.batch_size} (per-device) | Grad Accum: {args.grad_accum} | Effective: {args.batch_size * args.grad_accum}")
-    print(f"[*] Learning Rate:         {args.lr} (Cosine scheduler)")
-    print(f"[*] LoRA Configuration:    r={args.lora_rank}, alpha={args.lora_alpha}, dropout={args.lora_dropout}")
-    print(f"[*] Target Modules:        q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj")
+    print("SOFTWARE COMPONENT VERSIONS:")
+    print(f"  Python Version:          {sys.version.split()[0]}")
+    print(f"  PyTorch Version:         {torch.__version__}")
+    print(f"  Transformers Version:    {transformers.__version__}")
+    print(f"  TRL Version:             {trl.__version__}")
+    print(f"  PEFT Version:            {peft.__version__}")
+    print(f"  BitsAndBytes Version:    {bnb.__version__}")
+    print(f"  CUDA Version:            {torch.version.cuda if torch.version.cuda else 'N/A'}")
     print("-" * 80)
-    print("HARDWARE & MEMORY TELEMETRY:")
-    print(f"  GPU:                     {gpu_name}")
+    print("HARDWARE & ACCELERATION:")
+    print(f"  CUDA Available:          {cuda_available}")
+    print(f"  GPU Count:               {gpu_count}")
+    print(f"  GPU Name:                {gpu_name}")
     print(f"  VRAM Available:          {gpu_vram_gb} GB")
     print(f"  CUDA Capability:         {cuda_cap[0]}.{cuda_cap[1]}")
-    print(f"  Precision:               {'bfloat16' if bf16_supported else ('fp16' if cuda_available else 'fp32')}")
-    print("\nESTIMATED VRAM REQUIREMENT:")
+    print(f"  Selected Precision:      {target_precision.upper()} (FP16={use_fp16}, BF16={use_bf16})")
+    print(f"  4-Bit Quantization:      NF4 (Double Quant = True, Compute = {str(compute_dtype).split('.')[-1]})")
+    print("-" * 80)
+    print("TRAINING HYPERPARAMETERS:")
+    print(f"  Base Model:              {args.model_id}")
+    print(f"  Train Dataset:           {args.train_path}")
+    print(f"  Validation Dataset:      {args.val_path}")
+    print(f"  Output Directory:        {args.output_dir}")
+    print(f"  Batch Size:              {args.batch_size} (per-device) | Grad Accum: {args.grad_accum} | Effective: {args.batch_size * args.grad_accum}")
+    print(f"  Epochs:                  {args.epochs} | Learning Rate: {args.lr}")
+    print(f"  LoRA Configuration:      r={args.lora_rank}, alpha={args.lora_alpha}, dropout={args.lora_dropout}")
+    print(f"  Target Modules:          q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj")
+    print(f"  Checkpoint Strategy:     save_strategy='steps', save_steps=10, save_total_limit=3")
+    print("-" * 80)
+    print("ESTIMATED VRAM REQUIREMENT:")
     print(f"  Model (4-bit NF4):       ~{est_model_gb:.1f} GB")
     print(f"  LoRA Adapter:            ~{est_lora_gb:.1f} GB")
     print(f"  Optimizer States:        ~{est_optim_gb:.1f} GB")
     print(f"  Activation Footprint:    ~{est_activations_gb:.1f} GB")
-    print(f"  Total Estimated VRAM:    ~{est_total_vram_gb:.1f} GB")
+    print(f"  Total Estimated VRAM:    ~{est_total_vram_gb:.1f} GB (Headroom: {round(gpu_vram_gb - est_total_vram_gb, 1) if cuda_available else 0.0} GB)")
     print("=" * 80)
 
     if not cuda_available:
         print("\n[WARNING] CPU training detected. Qwen3-8B QLoRA will be extremely slow.")
         print("[WARNING] A CUDA-enabled NVIDIA GPU with >= 8GB VRAM is strongly recommended for production training.\n")
 
-    # 4. Load Datasets
+    # 5. Load Datasets
     print("[*] Step 1/5: Loading datasets...")
     data_files = {"train": str(args.train_path)}
     if args.val_path.exists():
@@ -229,18 +280,17 @@ def main():
     if "validation" in raw_datasets:
         print(f"[+] Validation dataset: {len(raw_datasets['validation'])} samples")
 
-    # 5. Tokenizer Setup
+    # 6. Tokenizer Setup
     print(f"[*] Step 2/5: Initializing tokenizer for {args.model_id}...")
     tokenizer = AutoTokenizer.from_pretrained(args.model_id, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
-    # 6. Model Loading and Quantization
-    print(f"[*] Step 3/5: Loading base model {args.model_id}...")
+    # 7. Model Loading and Quantization
+    print(f"[*] Step 3/5: Loading base model {args.model_id} in 4-bit NF4...")
     bnb_config = None
     if cuda_available:
-        compute_dtype = torch.bfloat16 if bf16_supported else torch.float16
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
@@ -251,7 +301,7 @@ def main():
     model_kwargs = {
         "trust_remote_code": True,
         "device_map": "auto" if cuda_available else "cpu",
-        "dtype": torch.bfloat16 if bf16_supported else (torch.float16 if cuda_available else torch.float32)
+        "torch_dtype": compute_dtype
     }
 
     if args.dry_run and not cuda_available:
@@ -268,7 +318,7 @@ def main():
     if cuda_available and bnb_config:
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
 
-    # 7. LoRA Adapter Configuration
+    # 8. LoRA Adapter Configuration
     print(f"[*] Step 4/5: Configuring LoRA adapter (r={args.lora_rank}, alpha={args.lora_alpha})...")
     target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
     lora_config = LoraConfig(
@@ -280,9 +330,8 @@ def main():
         target_modules=target_modules
     )
 
-    # 7.1. Handle Dry-Run Mode
+    # 8.1. Handle Dry-Run Mode
     if args.dry_run:
-        from peft import get_peft_model
         print("\n" + "=" * 80)
         print("CYBERQWEN-AI: DRY-RUN PRE-FLIGHT TRAINING PASS")
         print("=" * 80)
@@ -320,11 +369,12 @@ def main():
         print(f"[*] LoRA Status:           Active ({len(peft_model.peft_config)} adapter config)")
         print(f"[*] Computed Forward Loss: {loss:.4f}")
         print(f"[*] Batch Input Shape:     {tuple(inputs['input_ids'].shape)}")
+        print(f"[*] Selected Precision:    {target_precision.upper()}")
         print("[*] Pre-flight forward pass verified. Exiting without saving model checkpoints.")
         print("=" * 80 + "\n")
         return
 
-    # 8. SFTTrainer & Monitoring Setup
+    # 9. SFTTrainer & Monitoring Setup
     args.output_dir.mkdir(parents=True, exist_ok=True)
     checkpoints_dir = args.output_dir / "checkpoints"
     checkpoints_dir.mkdir(parents=True, exist_ok=True)
@@ -342,12 +392,14 @@ def main():
         warmup_steps=5,
         lr_scheduler_type="cosine",
         logging_steps=2,
-        eval_strategy="epoch" if "validation" in raw_datasets else "no",
-        save_strategy="epoch",
-        save_total_limit=2,
+        eval_strategy="steps" if "validation" in raw_datasets else "no",
+        eval_steps=10,
+        save_strategy="steps",
+        save_steps=10,
+        save_total_limit=3,
         max_grad_norm=1.0,
-        fp16=cuda_available and not bf16_supported,
-        bf16=bf16_supported,
+        fp16=use_fp16,
+        bf16=use_bf16,
         gradient_checkpointing=cuda_available,
         optim="paged_adamw_8bit" if cuda_available else "adamw_torch",
         report_to="none",
@@ -375,7 +427,7 @@ def main():
         callbacks=[telemetry_callback]
     )
 
-    # 9. Automatic Checkpoint Recovery
+    # 10. Automatic Checkpoint Recovery
     resume_flag = None
     if args.resume_from_checkpoint:
         if str(args.resume_from_checkpoint).lower() in ["auto", "true", "1", "yes"]:
@@ -386,20 +438,19 @@ def main():
         else:
             resume_flag = args.resume_from_checkpoint
     else:
-        # Default auto-resume if checkpoints exist
         latest_ckpt = find_latest_checkpoint(checkpoints_dir) or find_latest_checkpoint(args.output_dir)
         if latest_ckpt:
             resume_flag = str(latest_ckpt)
             print(f"[+] Found existing checkpoint: {resume_flag}. Automatically resuming training...")
 
-    # 10. Run Training
+    # 11. Run Training
     print("\n" + "=" * 80)
     print("LIVE TRAINING TELEMETRY")
     print("=" * 80)
 
     train_result = trainer.train(resume_from_checkpoint=resume_flag)
 
-    # 11. Save Adapter & Final Telemetry Log
+    # 12. Save Adapter & Telemetry
     print("\n[*] Step 5/5: Saving final LoRA adapter, tokenizer, and metrics...")
     trainer.model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
@@ -415,6 +466,7 @@ def main():
         "global_steps": train_result.global_step,
         "effective_batch_size": args.batch_size * args.grad_accum,
         "learning_rate": args.lr,
+        "precision": target_precision,
         "lora_rank": args.lora_rank,
         "lora_alpha": args.lora_alpha,
         "history": telemetry_callback.history
@@ -424,23 +476,43 @@ def main():
     with open(metrics_file, "w", encoding="utf-8") as f:
         json.dump(metrics_data, f, indent=2)
 
-    # Save to central logs/ directory for experiment tracking
     logs_dir = Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
     with open(logs_dir / "training_experiment_log.json", "w", encoding="utf-8") as f:
         json.dump(metrics_data, f, indent=2)
 
-    # Export history to CSV
     csv_file = logs_dir / "training_metrics.csv"
     with open(csv_file, "w", encoding="utf-8") as f:
-        f.write("step,epoch,loss,val_loss,learning_rate,elapsed_seconds\n")
+        f.write("step,epoch,loss,val_loss,learning_rate,gpu_vram,gpu_util,elapsed_seconds\n")
         for entry in telemetry_callback.history:
-            f.write(f"{entry['step']},{entry['epoch']},{entry['loss']},{entry['val_loss']},{entry['learning_rate']},{entry['elapsed_seconds']}\n")
+            f.write(f"{entry['step']},{entry['epoch']},{entry['loss']},{entry['val_loss']},{entry['learning_rate']},{entry.get('gpu_vram','N/A')},{entry.get('gpu_util','N/A')},{entry['elapsed_seconds']}\n")
+
+    # Generate Markdown Training Report
+    report_md = logs_dir / "TRAINING_COMPLETION_REPORT.md"
+    with open(report_md, "w", encoding="utf-8") as f:
+        f.write(f"# CyberQwen-AI: QLoRA Fine-Tuning Execution Report\n\n")
+        f.write(f"**Completion Timestamp**: {metrics_data['timestamp']}  \n")
+        f.write(f"**Base Model**: {args.model_id}  \n")
+        f.write(f"**LoRA Adapter Output**: `{args.output_dir}`  \n")
+        f.write(f"**Total Training Runtime**: {metrics_data['train_runtime_seconds']:.2f} seconds  \n")
+        f.write(f"**Final Train Loss**: {metrics_data['train_loss']:.4f}  \n\n")
+        f.write("## Hyperparameters\n")
+        f.write(f"- **Epochs**: {args.epochs}\n")
+        f.write(f"- **Batch Size**: {args.batch_size} (Effective: {args.batch_size * args.grad_accum})\n")
+        f.write(f"- **Learning Rate**: {args.lr}\n")
+        f.write(f"- **Precision**: {target_precision.upper()}\n")
+        f.write(f"- **LoRA Rank**: {args.lora_rank} (Alpha: {args.lora_alpha}, Dropout: {args.lora_dropout})\n\n")
+        f.write("## Loss & Step History\n\n")
+        f.write("| Step | Epoch | Train Loss | Val Loss | Learning Rate | VRAM | Elapsed |\n")
+        f.write("| :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n")
+        for entry in telemetry_callback.history:
+            f.write(f"| {entry['step']} | {entry['epoch']} | {entry['loss']} | {entry['val_loss']} | {entry['learning_rate']} | {entry.get('gpu_vram','N/A')} | {entry['elapsed_seconds']}s |\n")
 
     print("=" * 80)
     print("[SUCCESS] FULL QLORA FINE-TUNING COMPLETED!")
     print(f"[*] LoRA Adapter Saved:  {args.output_dir}")
     print(f"[*] Metrics Saved:       {metrics_file}")
+    print(f"[*] Report Generated:    {report_md}")
     print(f"[*] Final Train Loss:    {train_result.metrics.get('train_loss', 0.0):.4f}")
     print("=" * 80 + "\n")
 
